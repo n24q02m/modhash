@@ -34,3 +34,20 @@ sha256 truncated to 16 hex digits.
 | audio/tone.wav | 88244 | 041f510695ee6121 |
 | audio/tone22.wav | 44144 | 6d2dc990924d8cb1 |
 | mp4/minimal.mp4 | 748 | 53c629c9250c83cf |
+
+The video lane (`modhash-video`, spec §4.2) extends `mp4/` with real
+encoded fixtures and adds `h264/` Annex-B seeds; all are byte copies of
+files whose provenance lives in `modhash-video/tests/fixtures/PROVENANCE.md`
+and `modhash-h264/tests/fixtures/PROVENANCE.md` (ffmpeg 9.0.1 + libx264,
+baseline, generated locally 2026-10-03).
+
+| file | bytes | sha256:16 |
+|---|---|---|
+| mp4/a_64x48.mp4 | 6044 | fe641153a25f55b8 |
+| mp4/a_frag.mp4 | 3938 | 85f2a5fba4b27a03 |
+| mp4/e_mp4v.mp4 | 25181 | d7325b5341add0b1 |
+| mp4/high_64x48.mp4 | 2954 | 405ac3df8af9e0c5 |
+| mp4/tiny_16x16.mp4 | 1545 | eb750dd601c57bd3 |
+| h264/annexb_32x24.h264 | 1153 | 0c96019613ac8ac9 |
+| h264/t1_32x32_ip.h264 | 1247 | 937d317feb31f8cc |
+| h264/t3_16x16.h264 | 875 | c3604a1a8b9e0fd7 |

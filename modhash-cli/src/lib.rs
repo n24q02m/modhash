@@ -72,6 +72,9 @@ pub fn distance(a: &Signature, b: &Signature) -> Result<u32, modhash::Error> {
         MatchOutcome::Text { jaccard, .. } | MatchOutcome::Binary { jaccard, .. } => {
             Ok(((1.0 - jaccard) * 1_000_000.0).round() as u32)
         }
+        MatchOutcome::Video { score, .. } => {
+            Ok(((1.0 - score) * 1_000_000.0).round() as u32)
+        }
     }
 }
 
@@ -87,6 +90,11 @@ pub fn score_line(outcome: &MatchOutcome) -> String {
         },
         MatchOutcome::Text { jaccard, .. } => format!("score: jaccard={jaccard:.6}"),
         MatchOutcome::Binary { jaccard, .. } => format!("score: jaccard={jaccard:.6}"),
+        MatchOutcome::Video {
+            score,
+            minhash_jaccard,
+            ..
+        } => format!("score: frames={score:.6} minhash={minhash_jaccard:.6}"),
     }
 }
 
@@ -99,6 +107,7 @@ pub fn bound_line(outcome: &MatchOutcome) -> String {
         MatchOutcome::Audio { .. } => "advisory: votes >= 8".to_string(),
         MatchOutcome::Text { .. } => "advisory: jaccard >= 0.8".to_string(),
         MatchOutcome::Binary { .. } => "advisory: jaccard >= 0.5".to_string(),
+        MatchOutcome::Video { .. } => "advisory: frames >= 0.8".to_string(),
     }
 }
 
@@ -109,7 +118,8 @@ pub fn is_match(outcome: &MatchOutcome) -> bool {
         MatchOutcome::Image { matched, .. }
         | MatchOutcome::Audio { matched, .. }
         | MatchOutcome::Text { matched, .. }
-        | MatchOutcome::Binary { matched, .. } => *matched,
+        | MatchOutcome::Binary { matched, .. }
+        | MatchOutcome::Video { matched, .. } => *matched,
     }
 }
 
@@ -233,6 +243,9 @@ pub fn render_description(desc: &Description) -> String {
         modhash::Facts::Audio { .. } => Some("tier3: dtw (no stored features; comparator only)"),
         modhash::Facts::Text { .. } => Some("tier3: none (docx lane shares text tier-2)"),
         modhash::Facts::Binary { .. } => Some("tier3: none (no local features for binary)"),
+        modhash::Facts::Video { .. } => {
+            Some("tier3: none (frame hashes are the local features)")
+        }
     };
     let mut out = desc.to_string();
     if let Some(line) = tier3 {

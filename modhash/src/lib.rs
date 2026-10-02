@@ -17,10 +17,9 @@
 //!   binary;
 //! - [`match_`] scores two signatures of the same modality;
 //! - [`describe`] returns both tiers plus modality facts in one call.
-//!
-//! Modality slots whose crates have not landed (mp4 video) answer
-//! [`Error::Unsupported`] naming the modality — the slot is real and
-//! named, the lane is pending.
+//! Every modality slot named in the DAG table is wired: mp4 video
+//! lands through `modhash-video` (mp4 demux → h264 decode → 2 fps
+//! frame pHash chain → MinHash, spec §4.2).
 //!
 //! `no_std` + `alloc`, like its siblings; the fuzz harness is the crate's
 //! only `std` consumer (`src/bin/fuzz.rs`).
@@ -48,6 +47,7 @@ pub use modhash_index::{Calibration, Profile, calibrate};
 pub use modhash_primitives::{Algorithm, Digest, Format};
 pub use modhash_raster::{Image, Rgb};
 pub use modhash_text::{SIGNATURE_WORDS, canonicalize};
+pub use modhash_video::{VideoFingerprint, VideoMatch};
 
 /// Facade result alias.
 pub type Result<T, E = Error> = core::result::Result<T, E>;
@@ -68,6 +68,9 @@ const AUDIO_VOTE_FLOOR: u32 = 8;
 const IMAGE_HAMMING_MAX: u32 = 10;
 /// Advisory `matched` bound for text MinHash Jaccard estimate.
 const TEXT_JACCARD_MIN: f64 = 0.8;
+/// Advisory `matched` bound for video frame-match fraction (§4.2) —
+/// the value `modhash_video::MATCH_SCORE_MIN` pins.
+const VIDEO_SCORE_MIN: f64 = modhash_video::MATCH_SCORE_MIN;
 /// Advisory `matched` bound for binary chunk-set Jaccard.
 const BINARY_JACCARD_MIN: f64 = 0.5;
 
@@ -83,8 +86,7 @@ pub enum Modality {
     Text,
     /// Opaque bytes (zip, unknown, and every non-UTF-8 input).
     Binary,
-    /// Video (mp4 pending — `modhash-video`/`modhash-h264` have not
-    /// landed).
+    /// Video (mp4/mov ISO-BMFF containers carrying H.264).
     Video,
 }
 
@@ -157,7 +159,7 @@ pub fn detect(bytes: &[u8]) -> Detection {
         return d(Format::Mp3, Modality::Audio, false);
     }
     if bytes.len() >= 8 && &bytes[4..8] == b"ftyp" {
-        return d(Format::Mp4, Modality::Video, true);
+        return d(Format::Mp4, Modality::Video, false);
     }
     if bytes.starts_with(b"%PDF-") {
         return d(Format::Pdf, Modality::Text, false);
@@ -189,13 +191,16 @@ fn is_mp3_magic(b: &[u8]) -> bool {
 }
 
 /// The unsupported answer for a pending slot, with the lane named.
+/// Every slot in the DAG table has landed, so this is reachable only if
+/// a `Detection.pending` flag is ever left stale — kept so a stale flag
+/// still fails with a descriptive string, not a blank.
 fn pending_err(format: Format, modality: Modality) -> Error {
     let what = match (format, modality) {
-        // Mp3 is implemented; this arm is dead code kept so a stale
-        // `pending` flag fails with a descriptive string, not a blank.
+        // These slots are all implemented; each arm is dead code kept
+        // so a stale `pending` flag fails descriptively, not blankly.
         (Format::Mp3, _) => "modhash-mp3 pending flag left stale (bug)",
         (Format::Mp4, _) | (_, Modality::Video) => {
-            "modhash-video/mp4+h264 signature lane has not landed"
+            "modhash-video pending flag left stale (bug)"
         }
         (Format::Pdf, _) => "modhash-pdf pending flag left stale (bug)",
         _ => "modality lane has not landed",
@@ -386,11 +391,13 @@ fn to_mono(pcm: &Pcm) -> Result<Vec<i32>> {
 ///   (rate pinned in the header so the same PCM at different rates
 ///   hashes differently);
 /// - text → UTF-8 of `canonicalize()` (NFC + lowercase + one `\n`);
+/// - video → the decoded-frame digest chain: `w ∥ h ∥ n ∥` per-frame
+///   `sha256(y ∥ cb ∥ cr)` in presentation order
+///   ([`modhash_video::VideoFingerprint::content_digest`]);
 /// - binary → the raw bytes.
 ///
 /// # Errors
 ///
-/// [`Error::Unsupported`] on a pending slot (mp4),
 /// [`Error::Decode`] naming the modality when the container is claimed
 /// but corrupt, never a panic.
 pub fn content_hash(bytes: &[u8]) -> Result<Digest<32>> {
@@ -423,7 +430,14 @@ pub fn content_hash(bytes: &[u8]) -> Result<Digest<32>> {
                 }
             }
         }
-        Modality::Binary | Modality::Video => bytes.to_vec(),
+        Modality::Binary => bytes.to_vec(),
+        // Tier-1 for video is the decoded-frame digest chain the video
+        // crate computes while fingerprinting — same decode, one pass.
+        Modality::Video => {
+            return Ok(modhash_video::decode(bytes, &modhash_video::Limits::default())
+                .map_err(|e| decode_err(det.modality, e))?
+                .content_digest);
+        }
     };
     modhash_primitives::sha256(&payload).map_err(|e| decode_err(det.modality, e))
 }
@@ -509,6 +523,10 @@ pub enum Signature {
     /// FastCDC chunk-digest set (kit.md §5). Compare with
     /// [`BinarySignature::jaccard`].
     Binary(BinarySignature),
+    /// Video fingerprint: ordered frame-pHash chain + MinHash over its
+    /// shingles (spec §4.2). Compare with [`match_`] or
+    /// `modhash_video::video_match`.
+    Video(VideoFingerprint),
 }
 
 impl Signature {
@@ -520,16 +538,18 @@ impl Signature {
             Signature::Audio(_) => Modality::Audio,
             Signature::Text(_) => Modality::Text,
             Signature::Binary(_) => Modality::Binary,
+            Signature::Video(_) => Modality::Video,
         }
     }
 }
 
 /// Computes the tier-2 signature of `bytes`, routing on [`detect`].
 ///
-/// Pending slots (mp4 video) answer [`Error::Unsupported`] naming
-/// the modality. Non-UTF-8, non-container input is `Binary`; valid
-/// UTF-8 without a container magic is `Text`; a PDF contributes its
-/// extracted text to the `Text` lane.
+/// Pending slots answer [`Error::Unsupported`] naming the modality —
+/// every slot in the DAG table has landed, so today no lane is pending.
+/// Non-UTF-8, non-container input is `Binary`; valid UTF-8 without a
+/// container magic is `Text`; a PDF contributes its extracted text to
+/// the `Text` lane; mp4/mov enters the video lane.
 ///
 /// # Errors
 ///
@@ -555,7 +575,10 @@ pub fn signature(bytes: &[u8]) -> Result<Signature> {
                 Err(_) => binary_signature(text.as_ref()).map(Signature::Binary),
             }
         }
-        Modality::Binary | Modality::Video => binary_signature(bytes).map(Signature::Binary),
+        Modality::Binary => binary_signature(bytes).map(Signature::Binary),
+        Modality::Video => modhash_video::decode(bytes, &modhash_video::Limits::default())
+            .map_err(|e| decode_err(det.modality, e))
+            .map(Signature::Video),
     }
 }
 
@@ -654,6 +677,17 @@ pub enum Facts {
         /// Distinct FastCDC chunks.
         chunks: usize,
     },
+    /// Decoded video facts (spec §4.2).
+    Video {
+        /// Displayed width in pixels.
+        width: u32,
+        /// Displayed height in pixels.
+        height: u32,
+        /// Track duration in seconds.
+        duration_s: f64,
+        /// Frames the 2 fps sampler kept.
+        frames_sampled: usize,
+    },
 }
 
 /// Everything the kit reports about one input: format, modality, the
@@ -731,6 +765,19 @@ impl fmt::Display for Description {
                 "tier2: fastcdc {} unique chunks\nbinary: {len} B",
                 b.len()
             ),
+            (
+                Signature::Video(v),
+                Facts::Video {
+                    width,
+                    height,
+                    duration_s,
+                    frames_sampled,
+                },
+            ) => write!(
+                f,
+                "tier2: video {frames_sampled} sampled frames, minhash {} words\nvideo: {width}x{height}px, {duration_s:.3} s",
+                v.minhash.len()
+            ),
             // Constructible only from inside the crate; today's code
             // never pairs them, and a future arm must still not panic.
             _ => f.write_str("tier2: <inconsistent facts>"),
@@ -806,7 +853,7 @@ pub fn describe(bytes: &[u8]) -> Result<Description> {
                 },
             })
         }
-        Modality::Binary | Modality::Video => {
+        Modality::Binary => {
             let sig = signature(bytes)?;
             let chunks = match &sig {
                 Signature::Binary(b) => b.len(),
@@ -821,6 +868,25 @@ pub fn describe(bytes: &[u8]) -> Result<Description> {
                     len: bytes.len(),
                     chunks,
                 },
+            })
+        }
+        Modality::Video => {
+            let sig = signature(bytes)?;
+            let Signature::Video(v) = &sig else {
+                unreachable!("video modality yields a video signature")
+            };
+            let facts = Facts::Video {
+                width: v.width,
+                height: v.height,
+                duration_s: v.duration,
+                frames_sampled: v.frame_hashes.len(),
+            };
+            Ok(Description {
+                format: det.format,
+                modality: Modality::Video,
+                tier1,
+                signature: sig,
+                facts,
             })
         }
     }
@@ -856,6 +922,17 @@ pub enum MatchOutcome {
         /// `|A∩B| / |A∪B|`, `0.0..=1.0` (`1.0` for two empty sets).
         jaccard: f64,
         /// Advisory verdict: `jaccard >= 0.5`.
+        matched: bool,
+    },
+    /// Video: fraction of temporally aligned sampled frames within the
+    /// pHash bound, plus the MinHash Jaccard of the two shingle sets.
+    Video {
+        /// `modhash_video::match_score`, `0.0..=1.0`.
+        score: f64,
+        /// `modhash_text::jaccard_estimate` over the frame-chain
+        /// MinHash signatures, `0.0..=1.0`.
+        minhash_jaccard: f64,
+        /// Advisory verdict: `score >= 0.8` (spec §4.2 bound).
         matched: bool,
     },
 }
@@ -901,6 +978,14 @@ pub fn match_(a: &Signature, b: &Signature) -> Result<MatchOutcome> {
             Ok(MatchOutcome::Binary {
                 jaccard: j,
                 matched: j >= BINARY_JACCARD_MIN,
+            })
+        }
+        (Signature::Video(x), Signature::Video(y)) => {
+            let m = modhash_video::video_match(x, y);
+            Ok(MatchOutcome::Video {
+                score: m.score,
+                minhash_jaccard: m.minhash_jaccard,
+                matched: m.score >= VIDEO_SCORE_MIN,
             })
         }
         _ => Err(Error::BadValue("match_ across different modalities")),

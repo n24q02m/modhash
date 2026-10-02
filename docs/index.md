@@ -12,7 +12,7 @@ without a single registry package.
 | [audio](audio.md) | wav/flac/mp3 → PCM → spectral-peak landmarks |
 | [text](text.md) | utf8/pdf → canonical text → MinHash |
 | [binary](binary.md) | zip/gif/unknown → bytes → FastCDC chunks |
-| [video](video.md) | mp4/h264 — pending, honestly reported |
+| [video](video.md) | mp4/mov + h264 → frames → pHash chain → MinHash |
 | [limits](limits.md) | the exact codec-scope table and current status |
 | [contributing](contributing.md) | the three invariants + style rules |
 | [RECEIPTS](RECEIPTS.md) | every number in these docs, with provenance |

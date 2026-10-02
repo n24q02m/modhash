@@ -145,8 +145,8 @@ Prints the three tiers for one input:
   tier2  the modality signature (phash / audio peaks / minhash / fastcdc)
   tier3  local features (image: orb keypoints)
 
-A detected but unlanded lane (mp4 video) reports 'pending: true' and
-exits 0 — the report is honest, not a crash.
+A pending lane reports 'pending: true' and exits 0 — the report is
+honest, not a crash. (All DAG-table lanes have landed.)
 
 exit: 0 ok | 1 refused | 2 usage/io
 ";
@@ -251,6 +251,21 @@ fn describe_json(path: &str, d: &modhash::Description) -> String {
         (Signature::Binary(_), Facts::Binary { len, chunks }) => {
             s.push_str(&format!(
                 "\"tier2\": \"fastcdc:{chunks}\", \"tier3\": null, \"facts\": {{\"len\": {len}, \"chunks\": {chunks}}}"
+            ));
+        }
+        (
+            Signature::Video(v),
+            Facts::Video {
+                width,
+                height,
+                duration_s,
+                frames_sampled,
+            },
+        ) => {
+            s.push_str(&format!(
+                "\"tier2\": \"video:{}f\", \"tier3\": null, \"facts\": {{\"width\": {width}, \"height\": {height}, \"duration_s\": {duration_s}, \"frames_sampled\": {frames_sampled}, \"minhash_words\": {}}}",
+                v.frame_hashes.len(),
+                v.minhash.len()
             ));
         }
         _ => s.push_str("\"tier2\": null, \"tier3\": null, \"facts\": null"),
@@ -572,6 +587,9 @@ fn cmd_bench(args: &[String]) -> u8 {
                 Ok(Signature::Audio(s)) => sink ^= s.peaks().len() as u64,
                 Ok(Signature::Text(t)) => sink ^= t.first().copied().unwrap_or(0),
                 Ok(Signature::Binary(b)) => sink ^= b.len() as u64,
+                Ok(Signature::Video(v)) => {
+                    sink ^= v.frame_hashes.first().copied().unwrap_or(0)
+                }
                 Err(_) => unreachable!("warm-up proved the fixture signs"),
             }
         }
