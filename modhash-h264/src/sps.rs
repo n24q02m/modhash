@@ -108,16 +108,19 @@ pub(crate) fn parse(payload: &[u8]) -> Result<Sps> {
         77 => Profile::Main,
         88 => Profile::Extended,
         other => {
-            return Err(Error::Unsupported(match other {
-                100 => "h264 profile: High",
-                110 => "h264 profile: High 10",
-                122 => "h264 profile: High 4:2:2",
-                244 => "h264 profile: High 4:4:4",
-                44 => "h264 profile: CAVLC 4:4:4 Intra",
-                83 => "h264 profile: Scalable Baseline",
-                86 => "h264 profile: Scalable High",
-                118 => "h264 profile: Multiview High",
-                128 => "h264 profile: Stereo High",
+            let name = profile_name(u32::from(other));
+            // Leak-free: the error carries a &'static str, so map the
+            // profile name back through the table's static strings.
+            return Err(Error::Unsupported(match name {
+                "High" => "h264 profile: High",
+                "High 10" => "h264 profile: High 10",
+                "High 4:2:2" => "h264 profile: High 4:2:2",
+                "High 4:4:4" => "h264 profile: High 4:4:4",
+                "CAVLC 4:4:4 Intra" => "h264 profile: CAVLC 4:4:4 Intra",
+                "Scalable Baseline" => "h264 profile: Scalable Baseline",
+                "Scalable High" => "h264 profile: Scalable High",
+                "Multiview High" => "h264 profile: Multiview High",
+                "Stereo High" => "h264 profile: Stereo High",
                 _ => "h264 profile: unrecognised",
             }));
         }
@@ -150,7 +153,9 @@ pub(crate) fn parse(payload: &[u8]) -> Result<Sps> {
             offset_for_top_to_bottom = b.se()?;
             let cycles = b.ue()?;
             if cycles > 255 {
-                return Err(Error::BadValue("num_ref_frames_in_pic_order_cnt_cycle over 255"));
+                return Err(Error::BadValue(
+                    "num_ref_frames_in_pic_order_cnt_cycle over 255",
+                ));
             }
             for _ in 0..cycles {
                 offset_for_ref_frame.push(b.se()?);
@@ -169,7 +174,9 @@ pub(crate) fn parse(payload: &[u8]) -> Result<Sps> {
     }
     let frame_mbs_only = b.bit()?;
     if !frame_mbs_only {
-        return Err(Error::Unsupported("h264 interlaced (frame_mbs_only_flag = 0)"));
+        return Err(Error::Unsupported(
+            "h264 interlaced (frame_mbs_only_flag = 0)",
+        ));
     }
     let direct_8x8_inference = b.bit()?;
     let frame_cropping = b.bit()?;

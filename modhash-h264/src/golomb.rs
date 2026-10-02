@@ -30,11 +30,6 @@ impl<'a> Br<'a> {
         self.data.len() * 8 - self.pos
     }
 
-    /// Current position in bits.
-    pub(crate) fn position(&self) -> usize {
-        self.pos
-    }
-
     /// `true` when positioned on a byte boundary.
     pub(crate) fn is_byte_aligned(&self) -> bool {
         self.pos % 8 == 0
@@ -43,6 +38,12 @@ impl<'a> Br<'a> {
     /// Discards bits up to the next byte boundary.
     pub(crate) fn byte_align(&mut self) {
         self.pos = self.pos.div_ceil(8) * 8;
+    }
+
+    /// Bit position (test-only trace helper).
+    #[allow(dead_code)]
+    pub(crate) fn position(&self) -> usize {
+        self.pos
     }
 
     /// `true` when the only bits left are the RBSP stop bit and its
@@ -138,10 +139,12 @@ impl<'a> Br<'a> {
         Ok(v as i32)
     }
 
-    /// Truncated Exp-Golomb `te(v)`: a single bit when `range <= 1`.
+    /// Truncated Exp-Golomb `te(v)`: one bit when `range` is 1, and that
+    /// single bit is INVERTED per spec 9.1 (bit `0` decodes as `1`,
+    /// bit `1` as `0`); a plain `ue(v)` otherwise.
     pub(crate) fn te(&mut self, range: u32) -> Result<u32> {
         if range <= 1 {
-            self.bits(1)
+            Ok(1 - self.bits(1)?)
         } else {
             self.ue()
         }

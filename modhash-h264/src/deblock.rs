@@ -11,13 +11,13 @@
 //! and idc 2 additionally skips edges that sit on slice boundaries.
 
 use crate::mb::{MbState, MbType};
-use crate::tables::{block_index, ALPHA_TABLE, BETA_TABLE, TC0_TABLE};
+use crate::tables::{ALPHA_TABLE, BETA_TABLE, TC0_TABLE, block_index};
 use alloc::vec::Vec;
 
 /// Boundary strengths for one MB: vertical edges at luma x = {0,4,8,12}
 /// and horizontal at y = {0,4,8,12}; each entry is the strength of the
 /// 4-sample set `k`.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct BsMap {
     v: [[u8; 4]; 4],
     h: [[u8; 4]; 4],
@@ -27,15 +27,9 @@ fn is_intra(t: MbType) -> bool {
     t.is_intra()
 }
 
-
-
 /// Per-MB boundary-strength computation (spec 8.7.2.1, frame subset).
 /// `mb_a`/`mb_b` are the left/top neighbours of `cur`.
-fn compute_bs(
-    cur: &MbState,
-    mb_a: Option<&MbState>,
-    mb_b: Option<&MbState>,
-) -> BsMap {
+fn compute_bs(cur: &MbState, mb_a: Option<&MbState>, mb_b: Option<&MbState>) -> BsMap {
     let mut m = BsMap {
         v: [[0; 4]; 4],
         h: [[0; 4]; 4],
@@ -47,21 +41,27 @@ fn compute_bs(
         for k in 0..4usize {
             // ---- vertical edge at x4 = e, block row k ----
             let bsv = if e == 0 {
-                let nb = match mb_a {
-                    Some(m) => m,
-                    None => continue, // picture boundary: not filtered
-                };
-                if nb.slice_id != cur.slice_id && cur.disable_deblock_idc == 2 {
-                    continue;
-                }
-                let p_blk = block_index(3, k);
-                let q_blk = block_index(0, k);
-                if cur_intra || is_intra(nb.mb_type) {
-                    4
-                } else if cur.nz[q_blk] > 0 || nb.nz[p_blk] > 0 {
-                    2
-                } else {
-                    mv_diff_bs(cur.mv[q_blk], nb.mv[p_blk], cur.ref_idx[q_blk], nb.ref_idx[p_blk])
+                match mb_a {
+                    // Picture boundary: edge not filtered.
+                    None => 0,
+                    // Cross-slice edge suppressed by this slice's idc.
+                    Some(nb) if nb.slice_id != cur.slice_id && cur.disable_deblock_idc == 2 => 0,
+                    Some(nb) => {
+                        let p_blk = block_index(3, k);
+                        let q_blk = block_index(0, k);
+                        if cur_intra || is_intra(nb.mb_type) {
+                            4
+                        } else if cur.nz[q_blk] > 0 || nb.nz[p_blk] > 0 {
+                            2
+                        } else {
+                            mv_diff_bs(
+                                cur.mv[q_blk],
+                                nb.mv[p_blk],
+                                cur.ref_idx[q_blk],
+                                nb.ref_idx[p_blk],
+                            )
+                        }
+                    }
                 }
             } else {
                 let p_blk = block_index(e - 1, k);
@@ -83,21 +83,25 @@ fn compute_bs(
 
             // ---- horizontal edge at y4 = e, block column k ----
             let bsh = if e == 0 {
-                let nb = match mb_b {
-                    Some(m) => m,
-                    None => continue,
-                };
-                if nb.slice_id != cur.slice_id && cur.disable_deblock_idc == 2 {
-                    continue;
-                }
-                let p_blk = block_index(k, 3);
-                let q_blk = block_index(k, 0);
-                if cur_intra || is_intra(nb.mb_type) {
-                    4
-                } else if cur.nz[q_blk] > 0 || nb.nz[p_blk] > 0 {
-                    2
-                } else {
-                    mv_diff_bs(cur.mv[q_blk], nb.mv[p_blk], cur.ref_idx[q_blk], nb.ref_idx[p_blk])
+                match mb_b {
+                    None => 0,
+                    Some(nb) if nb.slice_id != cur.slice_id && cur.disable_deblock_idc == 2 => 0,
+                    Some(nb) => {
+                        let p_blk = block_index(k, 3);
+                        let q_blk = block_index(k, 0);
+                        if cur_intra || is_intra(nb.mb_type) {
+                            4
+                        } else if cur.nz[q_blk] > 0 || nb.nz[p_blk] > 0 {
+                            2
+                        } else {
+                            mv_diff_bs(
+                                cur.mv[q_blk],
+                                nb.mv[p_blk],
+                                cur.ref_idx[q_blk],
+                                nb.ref_idx[p_blk],
+                            )
+                        }
+                    }
                 }
             } else {
                 let p_blk = block_index(k, e - 1);
@@ -212,6 +216,7 @@ fn filter_set(
 
 /// Filters a vertical edge: 4 sets of samples, each on row `y0+k`,
 /// crossing column `x`. `plane` row-major, `stride` bytes.
+#[allow(clippy::too_many_arguments)]
 fn filter_v_edge(
     plane: &mut [u8],
     stride: usize,
@@ -257,6 +262,7 @@ fn filter_v_edge(
 
 /// Filters a horizontal edge: 4 sets of samples, each on column `x0+k`,
 /// crossing row `y`.
+#[allow(clippy::too_many_arguments)]
 fn filter_h_edge(
     plane: &mut [u8],
     stride: usize,
@@ -293,7 +299,9 @@ fn filter_h_edge(
 /// `y`, `cb`, `cr` are the picture planes (row-major, `stride` luma
 /// and `stride/2` chroma); `mbs` is the per-MB state array indexed by
 /// `mb_y * width_mbs + mb_x`. `qp_chroma` maps a luma QP to the chroma
-/// QP the spec uses on chroma edges (Table 8-15 via the PPS offset).
+/// QP the spec uses on chroma edges (Table 8-15 via the per-plane PPS
+/// offsets `chroma_off_cb`/`chroma_off_cr`).
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn filter_frame(
     y: &mut [u8],
     cb: &mut [u8],
@@ -303,7 +311,19 @@ pub(crate) fn filter_frame(
     width_mbs: usize,
     height_mbs: usize,
     qp_chroma: &[u8; 52],
+    chroma_off_cb: i32,
+    chroma_off_cr: i32,
 ) {
+    // Precompute the per-plane luma-QP -> chroma-QP tables (52 entries
+    // each) so every edge lookup is a single index.
+    let mut qpcb = [0u8; 52];
+    let mut qpcr = [0u8; 52];
+    for (i, v) in qpcb.iter_mut().enumerate() {
+        *v = qp_chroma[(i as i32 + chroma_off_cb).clamp(0, 51) as usize];
+    }
+    for (i, v) in qpcr.iter_mut().enumerate() {
+        *v = qp_chroma[(i as i32 + chroma_off_cr).clamp(0, 51) as usize];
+    }
     // Per-MB boundary strengths first (they're read for chroma too and
     // are independent of filtering order).
     let mut maps: Vec<BsMap> = Vec::with_capacity(mbs.len());
@@ -335,85 +355,81 @@ pub(crate) fn filter_frame(
             let off_cb = off_b;
             let _ = (off_ca, off_cb);
 
-            // LUMA vertical edges x = {0,4,8,12} of this MB.
-            for e in 0..4usize {
-                let x = mb_x * 16 + e * 4;
-                let mut qp_p = [0u8; 4];
-                if e == 0 {
-                    if mb_x == 0 {
-                        continue;
+            // LUMA: per 4-row band interleaved (h264bsd order):
+            // for each band e: vertical edges x={0,4,8,12} on that band's
+            // 4 rows, then horizontal edge y=4*e on all 16 columns.
+            // filter_v_edge covers rows y0..y0+3 -> call per band with bs row
+            for band in 0..4usize {
+                let y0 = mb_y * 16 + band * 4;
+                for e in 0..4usize {
+                    let x = mb_x * 16 + e * 4;
+                    let mut qp_p = [0u8; 4];
+                    if e == 0 {
+                        if mb_x == 0 {
+                            continue;
+                        }
+                        let nb = &mbs[idx - 1];
+                        if nb.slice_id != cur.slice_id && cur.disable_deblock_idc == 2 {
+                            continue;
+                        }
+                        qp_p.fill(nb.qp_y);
+                    } else {
+                        qp_p.fill(cur.qp_y);
                     }
-                    let nb = &mbs[idx - 1];
-                    if nb.slice_id != cur.slice_id && cur.disable_deblock_idc == 2 {
-                        continue;
-                    }
-                    for k in 0..4 {
-                        qp_p[k] = nb.qp_y;
-                    }
-                } else {
-                    for k in 0..4 {
-                        qp_p[k] = cur.qp_y;
-                    }
+                    // bs.v[e][band] applies to the 4 rows of this band
+                    let one = bs.v[e][band];
+                    filter_v_edge(
+                        y, stride, x, y0, &[one; 4], &qp_p, cur.qp_y, off_a, off_b, false,
+                    );
                 }
-                filter_v_edge(
-                    y,
-                    stride,
-                    x,
-                    mb_y * 16,
-                    &bs.v[e],
-                    &qp_p,
-                    cur.qp_y,
-                    off_a,
-                    off_b,
-                    false,
-                );
-            }
-
-            // LUMA horizontal edges y = {0,4,8,12}.
-            for e in 0..4usize {
-                let yy = mb_y * 16 + e * 4;
+                let yy = mb_y * 16 + band * 4;
                 let mut qp_p = [0u8; 4];
-                if e == 0 {
+                let mut do_edge = true;
+                if band == 0 {
                     if mb_y == 0 {
-                        continue;
-                    }
-                    let nb = &mbs[idx - width_mbs];
-                    if nb.slice_id != cur.slice_id && cur.disable_deblock_idc == 2 {
-                        continue;
-                    }
-                    for k in 0..4 {
-                        qp_p[k] = nb.qp_y;
+                        do_edge = false;
+                    } else {
+                        let nb = &mbs[idx - width_mbs];
+                        if nb.slice_id != cur.slice_id && cur.disable_deblock_idc == 2 {
+                            do_edge = false;
+                        } else {
+                            qp_p.fill(nb.qp_y);
+                        }
                     }
                 } else {
-                    for k in 0..4 {
-                        qp_p[k] = cur.qp_y;
+                    qp_p.fill(cur.qp_y);
+                }
+                if do_edge {
+                    // h edge at yy covers 4 columns groups: bs.h[band][k] per 4-col
+                    // filter_h_edge covers cols x0..x0+3 per call -> need 4 calls
+                    for cg in 0..4usize {
+                        let one = bs.h[band][cg];
+                        filter_h_edge(
+                            y,
+                            stride,
+                            mb_x * 16 + cg * 4,
+                            yy,
+                            &[one; 4],
+                            &qp_p,
+                            cur.qp_y,
+                            off_a,
+                            off_b,
+                            false,
+                        );
                     }
                 }
-                filter_h_edge(
-                    y,
-                    stride,
-                    mb_x * 16,
-                    yy,
-                    &bs.h[e],
-                    &qp_p,
-                    cur.qp_y,
-                    off_a,
-                    off_b,
-                    false,
-                );
             }
 
             // CHROMA: vertical edges at chroma x = {0, 4} (luma {0, 8});
             // horizontal at chroma y = {0, 4}. Strength = luma bS of
             // the edge containing the luma sample (2x, 2y).
-            for plane in [&mut *cb, &mut *cr] {
+            for (plane, qpc) in [(&mut *cb, &qpcb), (&mut *cr, &qpcr)] {
                 for e in 0..2usize {
                     let lx = e * 2; // luma edge index 0 or 2
-                    // bS for chroma k-set: luma bS at block-row k/2.
-                    let mut bs4 = [0u8; 4];
-                    for k in 0..4 {
-                        bs4[k] = bs.v[lx][k / 2];
-                    }
+                    // Chroma sample row r of this edge coincides with
+                    // luma rows 2r..2r+1 => luma bS band r/2 of luma
+                    // edge `lx` (spec 8.7.2.4; ffmpeg hands the luma
+                    // edge's own 4-entry bS array to edgecv).
                     let x = mb_x * 8 + e * 4;
                     let mut qp_p = [0u8; 4];
                     if e == 0 {
@@ -424,16 +440,17 @@ pub(crate) fn filter_frame(
                         if nb.slice_id != cur.slice_id && cur.disable_deblock_idc == 2 {
                             continue;
                         }
-                        for k in 0..4 {
-                            qp_p[k] = qp_chroma[nb.qp_y as usize];
-                        }
+                        qp_p.fill(qpc[nb.qp_y as usize]);
                     } else {
-                        for k in 0..4 {
-                            qp_p[k] = qp_chroma[cur.qp_y as usize];
-                        }
+                        qp_p.fill(qpc[cur.qp_y as usize]);
                     }
-                    // 8 chroma sample rows per edge = two 4-sets.
+                    // 8 chroma sample rows per edge = two 4-sample sets;
+                    // chroma row 4*half+k uses luma band 2*half + k/2.
                     for half in 0..2usize {
+                        let mut bs4 = [0u8; 4];
+                        for (k, dst) in bs4.iter_mut().enumerate() {
+                            *dst = bs.v[lx][2 * half + k / 2];
+                        }
                         filter_v_edge(
                             plane,
                             stride / 2,
@@ -441,7 +458,7 @@ pub(crate) fn filter_frame(
                             mb_y * 8 + half * 4,
                             &bs4,
                             &qp_p,
-                            qp_chroma[cur.qp_y as usize],
+                            qpc[cur.qp_y as usize],
                             off_a,
                             off_b,
                             true,
@@ -450,10 +467,8 @@ pub(crate) fn filter_frame(
                 }
                 for e in 0..2usize {
                     let ly = e * 2;
-                    let mut bs4 = [0u8; 4];
-                    for k in 0..4 {
-                        bs4[k] = bs.h[ly][k / 2];
-                    }
+                    // Same band mapping as the vertical case: chroma
+                    // column 4*half+k uses luma band 2*half + k/2.
                     let yy = mb_y * 8 + e * 4;
                     let mut qp_p = [0u8; 4];
                     if e == 0 {
@@ -464,15 +479,15 @@ pub(crate) fn filter_frame(
                         if nb.slice_id != cur.slice_id && cur.disable_deblock_idc == 2 {
                             continue;
                         }
-                        for k in 0..4 {
-                            qp_p[k] = qp_chroma[nb.qp_y as usize];
-                        }
+                        qp_p.fill(qpc[nb.qp_y as usize]);
                     } else {
-                        for k in 0..4 {
-                            qp_p[k] = qp_chroma[cur.qp_y as usize];
-                        }
+                        qp_p.fill(qpc[cur.qp_y as usize]);
                     }
                     for half in 0..2usize {
+                        let mut bs4 = [0u8; 4];
+                        for (k, dst) in bs4.iter_mut().enumerate() {
+                            *dst = bs.h[ly][2 * half + k / 2];
+                        }
                         filter_h_edge(
                             plane,
                             stride / 2,
@@ -480,7 +495,7 @@ pub(crate) fn filter_frame(
                             yy,
                             &bs4,
                             &qp_p,
-                            qp_chroma[cur.qp_y as usize],
+                            qpc[cur.qp_y as usize],
                             off_a,
                             off_b,
                             true,

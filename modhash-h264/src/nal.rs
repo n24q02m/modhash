@@ -42,7 +42,7 @@ pub(crate) const NAL_CODED_SLICE_AUX: u8 = 19;
 /// Slice without partitioning is legal but beyond baseline scope here
 /// (extension/slice-aux and scalable types 14/15/20/21 are all routed
 /// to [`Error::Unsupported`]).
-
+///
 /// One Annex-B NAL unit: header fields plus the payload span in the
 /// source buffer (emulation prevention NOT yet removed).
 #[derive(Copy, Clone, Debug)]

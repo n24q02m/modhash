@@ -45,8 +45,8 @@ extern crate alloc;
 
 mod cavlc;
 mod deblock;
-// mod decoder; // WIP: slice-data driver / MB layer next
-// mod dpb;      // WIP: decoded-picture buffer next
+mod decoder;
+mod dpb;
 mod golomb;
 mod inter;
 mod intra;
@@ -62,7 +62,28 @@ use alloc::vec::Vec;
 
 use modhash_primitives::{Error, Result};
 
-// pub use decoder::Decoder; // lands with the slice driver
+pub use decoder::Decoder;
+
+/// Decodes one Annex-B byte stream into its pictures in presentation
+/// order with the default [`Limits`].
+///
+/// `Err` names the first structural fault; truncation inside a NAL is
+/// `Error::Truncated`, a syntax element outside its table is
+/// `Error::BadValue`, and out-of-scope features (CABAC, B/SP/SI
+/// slices, field pictures, FMO, slice data partitioning, profiles
+/// above the baseline/main CAVLC subset) are `Error::Unsupported`.
+pub fn decode(stream: &[u8]) -> Result<Vec<Frame>> {
+    decode_with_limits(stream, &Limits::default())
+}
+
+/// [`decode`] with an explicit [`Limits`].
+pub fn decode_with_limits(stream: &[u8], limits: &Limits) -> Result<Vec<Frame>> {
+    if stream.len() > limits.max_input {
+        return Err(Error::too_large("h264 input", limits.max_input));
+    }
+    let mut dec = Decoder::new(*limits);
+    dec.push_stream(stream)
+}
 pub use sps::{Profile, Sps};
 
 /// One decoded output picture, 8-bit 4:2:0, after SPS cropping.
@@ -121,6 +142,3 @@ impl Default for Limits {
         }
     }
 }
-
-// WIP: `decode`/`decode_with_limits` land with `decoder.rs` (slice-data
-// driver + DPB). The `Limits`/`Frame` types below are already final.

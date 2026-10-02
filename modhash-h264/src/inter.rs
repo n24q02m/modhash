@@ -68,23 +68,21 @@ fn luma_sample(ref_: &[u8], w: usize, h: usize, x: i32, y: i32, fx: i32, fy: i32
     let mm = px(ref_, w, h, x, y + 1);
     match (fx, fy) {
         (0, 0) => clip8(g),
-        (1, 0) => clip8(g + half_b(ref_, w, h, x, y) + 1 >> 1),
+        (1, 0) => clip8((g + half_b(ref_, w, h, x, y) + 1) >> 1),
         (2, 0) => clip8(half_b(ref_, w, h, x, y)),
-        (3, 0) => clip8(hh + half_b(ref_, w, h, x, y) + 1 >> 1),
-        (0, 1) => clip8(g + half_h(ref_, w, h, x, y) + 1 >> 1),
+        (3, 0) => clip8((hh + half_b(ref_, w, h, x, y) + 1) >> 1),
+        (0, 1) => clip8((g + half_h(ref_, w, h, x, y) + 1) >> 1),
         (0, 2) => clip8(half_h(ref_, w, h, x, y)),
-        (0, 3) => clip8(mm + half_h(ref_, w, h, x, y) + 1 >> 1),
-        (1, 1) => clip8(half_b(ref_, w, h, x, y) + half_h(ref_, w, h, x, y) + 1 >> 1),
-        (1, 2) => clip8(half_h(ref_, w, h, x, y) + half_j(ref_, w, h, x, y) + 1 >> 1),
-        (1, 3) => clip8(half_h(ref_, w, h, x, y) + half_b(ref_, w, h, x, y + 1) + 1 >> 1),
-        (2, 1) => clip8(half_b(ref_, w, h, x, y) + half_j(ref_, w, h, x, y) + 1 >> 1),
+        (0, 3) => clip8((mm + half_h(ref_, w, h, x, y) + 1) >> 1),
+        (1, 1) => clip8((half_b(ref_, w, h, x, y) + half_h(ref_, w, h, x, y) + 1) >> 1),
+        (1, 2) => clip8((half_h(ref_, w, h, x, y) + half_j(ref_, w, h, x, y) + 1) >> 1),
+        (1, 3) => clip8((half_h(ref_, w, h, x, y) + half_b(ref_, w, h, x, y + 1) + 1) >> 1),
+        (2, 1) => clip8((half_b(ref_, w, h, x, y) + half_j(ref_, w, h, x, y) + 1) >> 1),
         (2, 2) => clip8(half_j(ref_, w, h, x, y)),
-        (2, 3) => clip8(half_j(ref_, w, h, x, y) + half_b(ref_, w, h, x, y + 1) + 1 >> 1),
-        (3, 1) => clip8(half_b(ref_, w, h, x, y) + half_h(ref_, w, h, x + 1, y) + 1 >> 1),
-        (3, 2) => clip8(half_j(ref_, w, h, x, y) + half_h(ref_, w, h, x + 1, y) + 1 >> 1),
-        (3, 3) => clip8(
-            half_h(ref_, w, h, x + 1, y) + half_b(ref_, w, h, x, y + 1) + 1 >> 1,
-        ),
+        (2, 3) => clip8((half_j(ref_, w, h, x, y) + half_b(ref_, w, h, x, y + 1) + 1) >> 1),
+        (3, 1) => clip8((half_b(ref_, w, h, x, y) + half_h(ref_, w, h, x + 1, y) + 1) >> 1),
+        (3, 2) => clip8((half_j(ref_, w, h, x, y) + half_h(ref_, w, h, x + 1, y) + 1) >> 1),
+        (3, 3) => clip8((half_h(ref_, w, h, x + 1, y) + half_b(ref_, w, h, x, y + 1) + 1) >> 1),
         _ => unreachable!("quarter-pel fraction out of range"),
     }
 }
@@ -96,7 +94,8 @@ fn chroma_sample(ref_: &[u8], w: usize, h: usize, x: i32, y: i32, fx: i32, fy: i
     let b = px(ref_, w, h, x + 1, y);
     let c = px(ref_, w, h, x, y + 1);
     let d = px(ref_, w, h, x + 1, y + 1);
-    let v = ((8 - fx) * (8 - fy) * a + fx * (8 - fy) * b + (8 - fx) * fy * c + fx * fy * d + 32) >> 6;
+    let v =
+        ((8 - fx) * (8 - fy) * a + fx * (8 - fy) * b + (8 - fx) * fy * c + fx * fy * d + 32) >> 6;
     clip8(v)
 }
 
@@ -104,6 +103,7 @@ fn chroma_sample(ref_: &[u8], w: usize, h: usize, x: i32, y: i32, fx: i32, fy: i
 /// top-left corner sits at `(px0, py0)` in picture coordinates and whose
 /// quarter-pel motion vector is `mv`. Writes into `dst` (row-major,
 /// `pw` stride = `pw`).
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn mc_luma(
     ref_: &[u8],
     rw: usize,
@@ -137,6 +137,7 @@ pub(crate) fn mc_luma(
 /// both components since MvVerticalChromA = mvCLX / 2 truncated — for
 /// frame pictures the chroma vector is simply the luma vector halved,
 /// then decomposed into eighth-pel units).
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn mc_chroma(
     ref_: &[u8],
     rw: usize,

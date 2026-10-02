@@ -15,7 +15,7 @@
 //! builds. Wrapping keeps the behaviour deterministic instead of
 //! panicking; the conformance tests pin the legal-input exactness.
 
-use crate::tables::{scale_class, LEVEL_SCALE_4X4, QP_DIV6, QP_MOD6};
+use crate::tables::{LEVEL_SCALE_4X4, QP_DIV6, QP_MOD6, scale_class};
 use modhash_primitives::{Error, Result};
 
 /// 4x4 inverse transform input/output block (`i32` per spec working
@@ -57,7 +57,9 @@ pub(crate) fn inverse_4x4(b: &mut Block4) -> Result<()> {
         // [-2^15, 2^15-1]; a conforming stream never exceeds it.
         for &v in &[b[i0], b[i1], b[i2], b[i3]] {
             if !(-32768..=32767).contains(&v) {
-                return Err(Error::BadValue("inverse transform intermediate out of range"));
+                return Err(Error::BadValue(
+                    "inverse transform intermediate out of range",
+                ));
             }
         }
     }
@@ -75,13 +77,27 @@ pub(crate) fn dequant_4x4(coeffs: &mut [i32; 16], qp: u8) {
     for i in 0..16 {
         let s = i64::from(m[scale_class(i % 4, i / 4)]);
         let c = i64::from(coeffs[i]);
-        let v = if qp >= 24 {
-            (c * s) << (q6 - 4)
-        } else {
-            (c * s + (1i64 << (3 - q6))) >> (4 - q6)
-        };
+        // Spec 8.5.12.1 (eq. 8-336): d_ij = c_ij * LevelScale << (qP/6)
+        // at every qP — the reference implementation (h264bsd
+        // levelScale[] << qpDiv, FFmpeg's quant_div6+2 table feeding a
+        // >>6 normaliser) has no low-qP branch.
+        let v = (c * s) << q6;
         coeffs[i] = v.clamp(i32::MIN as i64, i32::MAX as i64) as i32;
     }
+}
+
+/// Dequantises a single coefficient at raster position `(x, y)` —
+/// the per-coefficient core of [`dequant_4x4`], exposed for callers
+/// (Intra-16x16 AC, chroma AC) whose DC slot is filled from the
+/// Hadamard path instead of `LevelScale`.
+pub(crate) fn dequant_coeff(c: i32, qp: u8, x: usize, y: usize) -> i32 {
+    debug_assert!(qp < 52);
+    let m = LEVEL_SCALE_4X4[QP_MOD6[qp as usize] as usize];
+    let q6 = qp as i64 / 6;
+    let s = i64::from(m[scale_class(x, y)]);
+    // Same unconditional scale as [`dequant_4x4`].
+    let v = (i64::from(c) * s) << q6;
+    v.clamp(i32::MIN as i64, i32::MAX as i64) as i32
 }
 
 /// 4x4 Hadamard inverse for the Intra-16x16 luma DC block
@@ -94,7 +110,9 @@ pub(crate) fn dequant_4x4(coeffs: &mut [i32; 16], qp: u8) {
 /// implementation).
 pub(crate) fn inv_luma_dc(block: &mut Block4, qp: u8) {
     debug_assert!(qp < 52);
-    // 4x4 Hadamard, horizontal then vertical, no scaling yet.
+    // 4x4 Hadamard, horizontal then vertical; the scaling is folded
+    // into the vertical pass exactly as the spec's 8.5.11.1 (verified
+    // against h264bsdProcessLumaDc).
     for row in 0..4 {
         let p = &mut block[row * 4..row * 4 + 4];
         let a0 = p[0].wrapping_add(p[2]);
@@ -106,56 +124,59 @@ pub(crate) fn inv_luma_dc(block: &mut Block4, qp: u8) {
         p[2] = a1.wrapping_sub(a2);
         p[3] = a0.wrapping_sub(a3);
     }
+    let ls = i64::from(LEVEL_SCALE_4X4[QP_MOD6[qp as usize] as usize][0]);
+    let qp_div = i64::from(QP_DIV6[qp as usize]);
     for col in 0..4 {
         let i0 = col;
         let i1 = col + 4;
         let i2 = col + 8;
         let i3 = col + 12;
-        let a0 = block[i0].wrapping_add(block[i2]);
-        let a1 = block[i0].wrapping_sub(block[i2]);
-        let a2 = block[i1].wrapping_sub(block[i3]);
-        let a3 = block[i1].wrapping_add(block[i3]);
-        block[i0] = a0.wrapping_add(a3);
-        block[i1] = a1.wrapping_add(a2);
-        block[i2] = a1.wrapping_sub(a2);
-        block[i3] = a0.wrapping_sub(a3);
-    }
-    // Scaling (spec 8.5.10, eqs. 8-321/8-322).
-    let ls = i64::from(LEVEL_SCALE_4X4[QP_MOD6[qp as usize] as usize][0]);
-    let qp_div = qp as i64 / 6;
-    if qp >= 36 {
-        let shift = qp_div - 6;
-        for v in block.iter_mut() {
-            *v = ((i64::from(*v) * ls) << shift)
-                .clamp(i32::MIN as i64, i32::MAX as i64) as i32;
-        }
-    } else {
-        let shift = 6 - qp_div;
-        let r = 1i64 << (5 - qp_div);
-        for v in block.iter_mut() {
-            *v = ((i64::from(*v) * ls + r) >> shift)
-                .clamp(i32::MIN as i64, i32::MAX as i64) as i32;
+        let w0 = i64::from(block[i0]).wrapping_add(i64::from(block[i2]));
+        let w1 = i64::from(block[i0]).wrapping_sub(i64::from(block[i2]));
+        let w2 = i64::from(block[i1]).wrapping_sub(i64::from(block[i3]));
+        let w3 = i64::from(block[i1]).wrapping_add(i64::from(block[i3]));
+        let w = [
+            w0.wrapping_add(w3),
+            w1.wrapping_add(w2),
+            w1.wrapping_sub(w2),
+            w0.wrapping_sub(w3),
+        ];
+        let idx = [i0, i1, i2, i3];
+        for (k, &i) in idx.iter().enumerate() {
+            block[i] = if qp >= 12 {
+                (w[k] * (ls << (qp_div - 2))).clamp(i32::MIN as i64, i32::MAX as i64) as i32
+            } else {
+                let r = if qp_div == 1 { 1 } else { 2 };
+                ((w[k] * ls + r) >> (2 - qp_div)).clamp(i32::MIN as i64, i32::MAX as i64) as i32
+            };
         }
     }
 }
 
-/// 2x2 Hadamard inverse for a chroma DC block (spec 8.5.11.1,
-/// eq. 8-324), followed by the ChromaArrayType=1 scaling of
-/// 8.5.11.2 eq. 8-326: `(f * LevelScale(qP%6,0,0) << (qP/6)) >> 5`.
-/// Input and return order are 2x2 raster: `[c00, c01, c10, c11]`.
+/// 2x2 Hadamard inverse for a chroma DC block (spec 8.5.11.2) with the
+/// scaling folded in, matching the reference decoder
+/// (`h264bsdProcessChromaDc`): for `qP >= 6` each transformed value is
+/// `w * (LevelScale(qP%6,0,0) << (qP/6 - 1))`; for `qP < 6` it is
+/// `(w * LevelScale) >> 1`. Input and return order are 2x2 raster:
+/// `[c00, c01, c10, c11]`.
 pub(crate) fn inv_chroma_dc(dc: &[i32; 4], qp: u8) -> [i32; 4] {
     debug_assert!(qp < 52);
-    let a0 = dc[0] as i64 + dc[2] as i64;
-    let a1 = dc[0] as i64 - dc[2] as i64;
-    let a2 = dc[1] as i64 - dc[3] as i64;
-    let a3 = dc[1] as i64 + dc[3] as i64;
+    let a0 = i64::from(dc[0]) + i64::from(dc[2]);
+    let a1 = i64::from(dc[0]) - i64::from(dc[2]);
+    let a2 = i64::from(dc[1]) - i64::from(dc[3]);
+    let a3 = i64::from(dc[1]) + i64::from(dc[3]);
     // W2 * C * W2ᵀ in raster order: [f00, f01, f10, f11].
     let f = [a0 + a3, a0 - a3, a1 + a2, a1 - a2];
     let ls = i64::from(LEVEL_SCALE_4X4[QP_MOD6[qp as usize] as usize][0]);
-    let shift = i64::from(QP_DIV6[qp as usize]);
+    let qp_div = i64::from(QP_DIV6[qp as usize]);
     let mut out = [0i32; 4];
-    for (o, v) in out.iter_mut().zip(f.iter()) {
-        *o = (((v * ls) << shift) >> 5).clamp(i32::MIN as i64, i32::MAX as i64) as i32;
+    for (o, &w) in out.iter_mut().zip(f.iter()) {
+        let v = if qp >= 6 {
+            w * (ls << (qp_div - 1))
+        } else {
+            (w * ls) >> 1
+        };
+        *o = v.clamp(i32::MIN as i64, i32::MAX as i64) as i32;
     }
     out
 }

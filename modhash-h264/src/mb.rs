@@ -10,7 +10,6 @@
 //!   storage and deblocking boundary strengths use. All per-4x4 arrays
 //!   in [`MbState`] are group-major.
 
-use crate::tables::block_index;
 use modhash_primitives::{Error, Result};
 
 /// Parsed `mb_type` semantics, covering every baseline P- and I-slice
@@ -22,7 +21,7 @@ pub(crate) enum MbType {
     /// I_16x16 with `intra16x16_pred_mode` (0..3), chroma cbp (0..2) and
     /// luma cbp (0 or 15).
     I16x16 {
-        /// `Intra16x16PredMode` 0..=3 (DC, H, V, Plane).
+        /// `Intra16x16PredMode` 0..=3 — V, H, DC, Plane (Table 8-3 order).
         pred: u8,
         /// `CodedBlockPatternChroma` 0..=2.
         cbp_chroma: u8,
@@ -49,11 +48,6 @@ impl MbType {
     /// `true` for any intra mode (4x4, 16x16, PCM).
     pub(crate) fn is_intra(self) -> bool {
         matches!(self, MbType::I4x4 | MbType::I16x16 { .. } | MbType::IPcm)
-    }
-
-    /// `true` when the macroblock predicts as sixteen 4x4 blocks.
-    pub(crate) fn is_4x4_intra(self) -> bool {
-        matches!(self, MbType::I4x4)
     }
 
     /// Decodes an I-slice `mb_type` code number (spec Table 7-11).
@@ -136,6 +130,8 @@ pub(crate) struct MbState {
     pub mb_type: MbType,
     /// Slice this macroblock belongs to (for cross-slice checks).
     pub slice_id: u32,
+    /// Debug: raster index of this MB (set by the decoder loop).
+    pub dbg_idx: u32,
     /// `QPy` for this macroblock.
     pub qp_y: u8,
     /// Deblocking idc of the slice that coded this MB (needed when
@@ -165,6 +161,7 @@ impl MbState {
         MbState {
             mb_type: MbType::PSkip,
             slice_id: u32::MAX,
+            dbg_idx: u32::MAX,
             qp_y: 26,
             disable_deblock_idc: 0,
             filter_offset_a: 0,
@@ -190,52 +187,41 @@ pub(crate) struct MbMap {
     pub y: usize,
     /// Picture width in MBs.
     pub width: usize,
+    /// Slice sequence number of the slice currently being decoded.
+    /// Foreign MBs count as neighbours only when their `slice_id`
+    /// matches — spec 7.4.3 / 9.2.1: blocks in a different slice are
+    /// not available as prediction context.
+    pub sid: u32,
 }
 
 impl MbMap {
     /// Index of the left neighbour MB (mbAddrA), if any.
     pub(crate) fn mb_a(self) -> Option<usize> {
-        (self.x > 0).then_some(self.idx - 1)
+        if self.x > 0 { Some(self.idx - 1) } else { None }
     }
     /// Index of the top neighbour MB (mbAddrB), if any.
     pub(crate) fn mb_b(self) -> Option<usize> {
-        (self.y > 0).then_some(self.idx - self.width)
+        if self.y > 0 {
+            Some(self.idx - self.width)
+        } else {
+            None
+        }
     }
     /// Index of the top-right neighbour MB (mbAddrC), if any.
     pub(crate) fn mb_c(self) -> Option<usize> {
-        (self.y > 0 && self.x + 1 < self.width).then_some(self.idx - self.width + 1)
+        if self.y > 0 && self.x + 1 < self.width {
+            Some(self.idx - self.width + 1)
+        } else {
+            None
+        }
     }
     /// Index of the top-left neighbour MB (mbAddrD), if any.
     pub(crate) fn mb_d(self) -> Option<usize> {
-        (self.y > 0 && self.x > 0).then_some(self.idx - self.width - 1)
-    }
-}
-
-/// For the group-major 4x4 block index `blk` of the current MB, returns
-/// the left-neighbour block as `(Option<neighbour_mb>, index-in-that-mb)`
-/// where a `None` mb means "same macroblock" (group-major index too).
-/// This is `h264bsd`'s `N_A_4x4B` table, derived geometrically: the
-/// left neighbour of 4x4 block (x4, y4) is (x4-1, y4) when x4 > 0 else
-/// (3, y4) of mbAddrA — but expressed in group-major indices.
-pub(crate) fn n_a(blk: usize) -> (bool, usize) {
-    let (x4, y4) = crate::tables::block_xy(blk);
-    if x4 > 0 {
-        (false, block_index(x4 - 1, y4))
-    } else {
-        // In mbA: its right-edge block at the same row. mbA's (3, y4)
-        // in ITS group-major order.
-        (true, block_index(3, y4))
-    }
-}
-
-/// Top neighbour of group-major block `blk`: `(true, mbB-index)` or
-/// `(false, same-mb index)`. Spec: block containing (xP, yP-1).
-pub(crate) fn n_b(blk: usize) -> (bool, usize) {
-    let (x4, y4) = crate::tables::block_xy(blk);
-    if y4 > 0 {
-        (false, block_index(x4, y4 - 1))
-    } else {
-        (true, block_index(x4, 3))
+        if self.y > 0 && self.x > 0 {
+            Some(self.idx - self.width - 1)
+        } else {
+            None
+        }
     }
 }
 
@@ -265,40 +251,37 @@ pub(crate) type BlockRef = (Nb, usize, usize);
 /// Neighbour 4x4 blocks of raster block `r` inside the MB
 /// (spec 6.4.11.4 + 8.3.1.1 availability by construction):
 /// `(A, B, C, D)` as luma-block coordinates.
-pub(crate) fn intra4x4_neighbours(r: usize) -> [BlockRef; 4] {
-    let x = r % 4;
-    let y = r / 4;
-    let a = if x > 0 {
-        (Nb::Curr, x - 1, y)
-    } else {
-        (Nb::A, 3, y)
-    };
-    let b = if y > 0 {
-        (Nb::Curr, x, y - 1)
-    } else {
-        (Nb::B, x, 3)
-    };
-    // C: the block containing the above-right samples (xP+4, yP-1),
-    // i.e. 4x4 block (x+1, y-1) of the current MB when both in range.
-    let c = if y > 0 {
-        if x < 3 {
-            (Nb::Curr, x + 1, y - 1)
+pub(crate) fn intra4x4_neighbours(blk: usize) -> [BlockRef; 4] {
+    // `blk` is the group-major (luma4x4BlkIdx) index. Neighbourhood is
+    // derived on the 4x4 raster grid, then mapped back to group-major
+    // indices so same-MB members carry `Curr` + group-major id.
+    let (x, y) = crate::tables::block_xy(blk);
+    let (xi, yi) = (x as i32, y as i32);
+    let map = |nx: i32, ny: i32| -> BlockRef {
+        if (0..4).contains(&nx) && (0..4).contains(&ny) {
+            (Nb::Curr, nx as usize, ny as usize)
         } else {
-            // (4, y-1) belongs to the right-hand MB, not yet coded.
-            (Nb::None, 0, 0)
+            // Foreign block: which neighbour MB by the crossed edges.
+            let who = match (nx < 0, ny < 0, nx >= 4) {
+                (true, false, false) => Nb::A,
+                (false, true, false) => Nb::B,
+                (false, true, true) => Nb::C,
+                (true, true, false) => Nb::D,
+                (true, false, true) => Nb::A,
+                _ => Nb::None,
+            };
+            if who == Nb::A && nx < 0 && ny < 0 {
+                (Nb::D, 3, 3)
+            } else {
+                let lx = nx.rem_euclid(4);
+                let ly = ny.rem_euclid(4);
+                (who, lx as usize, ly as usize)
+            }
         }
-    } else if x < 3 {
-        // y = -1 stays in the MB above (same x span): mbAddrB.
-        (Nb::B, x + 1, 3)
-    } else {
-        // x = 16..19, y = -1: bottom-left of mbAddrC.
-        (Nb::C, 0, 3)
     };
-    let d = match (x > 0, y > 0) {
-        (true, true) => (Nb::Curr, x - 1, y - 1),
-        (false, true) => (Nb::A, 3, y - 1),
-        (true, false) => (Nb::B, x - 1, 3),
-        (false, false) => (Nb::D, 3, 3),
-    };
+    let a = map(xi - 1, yi);
+    let b = map(xi, yi - 1);
+    let c = map(xi + 1, yi - 1);
+    let d = map(xi - 1, yi - 1);
     [a, b, c, d]
 }

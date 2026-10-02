@@ -8,7 +8,10 @@ use modhash_primitives::{Error, Result};
 pub(crate) struct Pps {
     /// `pic_parameter_set_id` (0..=255).
     pub id: u32,
-    /// Referenced `seq_parameter_set_id`.
+    /// Referenced `seq_parameter_set_id`. Parsed and consumed by the
+    /// caller for the SPS↔PPS association; a single-SPS decoder keeps
+    /// it for the message only.
+    #[allow(dead_code)]
     pub sps_id: u32,
     /// `entropy_coding_mode_flag` — `false` (CAVLC) required.
     pub cabac: bool,
@@ -16,23 +19,36 @@ pub(crate) struct Pps {
     pub bottom_field_pic_order: bool,
     /// `num_ref_idx_l0_active_minus1` + 1.
     pub num_ref_idx_l0_active: u32,
-    /// `num_ref_idx_l1_active_minus1` + 1 (B-slices only).
+    /// `num_ref_idx_l1_active_minus1` + 1 (B-slices only); parsed to
+    /// keep the syntax complete — this crate refuses B slices before
+    /// it could be read.
+    #[allow(dead_code)]
     pub num_ref_idx_l1_active: u32,
     /// `weighted_pred_flag` (P-slice weighted prediction).
     pub weighted_pred: bool,
-    /// `weighted_bipred_idc` (B-slices only).
+    /// `weighted_bipred_idc` (B-slices only); parsed for syntax
+    /// completeness.
+    #[allow(dead_code)]
     pub weighted_bipred_idc: u32,
     /// `pic_init_qp_minus26` + 26.
     pub pic_init_qp: i32,
-    /// `pic_init_qs_minus26` + 26.
+    /// `pic_init_qs_minus26` + 26 (SP/SI only); parsed for syntax
+    /// completeness.
+    #[allow(dead_code)]
     pub pic_init_qs: i32,
-    /// `chroma_qp_index_offset`.
+    /// `chroma_qp_index_offset` (Cb; Cr uses [`Pps::chroma_qp_index_offset_cr`]).
     pub chroma_qp_index_offset: i32,
+    /// `second_chroma_qp_index_offset` when the extension tail carries
+    /// it; defaults to `chroma_qp_index_offset` (spec 7.4.2.2).
+    pub chroma_qp_index_offset_cr: i32,
     /// `deblocking_filter_control_present_flag`.
     pub deblocking_control: bool,
     /// `constrained_intra_pred_flag`.
     pub constrained_intra_pred: bool,
-    /// `redundant_pic_cnt_present_flag` — required `false`.
+    /// `redundant_pic_cnt_present_flag` — required `false`; parsed to
+    /// keep the PPS grammar complete, redundant slices are refused in
+    /// the slice header instead.
+    #[allow(dead_code)]
     pub redundant_pic_cnt: bool,
 }
 
@@ -51,7 +67,9 @@ pub(crate) fn parse(payload: &[u8]) -> Result<Pps> {
     }
     let cabac = b.bit()?;
     if cabac {
-        return Err(Error::Unsupported("h264 CABAC (entropy_coding_mode_flag = 1)"));
+        return Err(Error::Unsupported(
+            "h264 CABAC (entropy_coding_mode_flag = 1)",
+        ));
     }
     let bottom_field_pic_order = b.bit()?;
     let num_slice_groups = b.ue()? + 1;
@@ -83,6 +101,7 @@ pub(crate) fn parse(payload: &[u8]) -> Result<Pps> {
         ));
     }
 
+    let mut second_chroma_offset = chroma_qp_index_offset;
     // Extension tail (more_rbsp_data): transform_8x8_mode_flag,
     // pic_scaling_matrix, second chroma offset. Baseline streams do not
     // send it; when present and it asks for 8x8 transforms that is a
@@ -99,7 +118,12 @@ pub(crate) fn parse(payload: &[u8]) -> Result<Pps> {
             // always a refusal.
             return Err(Error::Unsupported("h264 pic_scaling_matrix (High profile)"));
         }
-        let _second_chroma_offset = b.se()?;
+        second_chroma_offset = b.se()?;
+        if !(-12..=12).contains(&second_chroma_offset) {
+            return Err(Error::BadValue(
+                "second_chroma_qp_index_offset out of range",
+            ));
+        }
     }
 
     Ok(Pps {
@@ -114,6 +138,7 @@ pub(crate) fn parse(payload: &[u8]) -> Result<Pps> {
         pic_init_qp,
         pic_init_qs,
         chroma_qp_index_offset,
+        chroma_qp_index_offset_cr: second_chroma_offset,
         deblocking_control,
         constrained_intra_pred,
         redundant_pic_cnt,

@@ -56,17 +56,26 @@ pub(crate) struct SliceHeader {
     pub pps_id: u32,
     /// `frame_num`.
     pub frame_num: u32,
-    /// `idr_pic_id` (IDR slices only).
+    /// `idr_pic_id` (IDR slices only); multi-slice IDR pictures must
+    /// agree — compared by the decoder when a second IDR slice arrives
+    /// for the same picture.
     pub idr_pic_id: u32,
-    /// `pic_order_cnt_lsb` (type 0).
+    /// `pic_order_cnt_lsb` (type 0). Baseline streams never reorder —
+    /// output order is decode order — so POC is parsed but unread.
+    #[allow(dead_code)]
     pub pic_order_cnt_lsb: u32,
     /// `delta_pic_order_cnt_bottom` (type 0 + bottom_field flag).
+    #[allow(dead_code)]
     pub delta_poc_bottom: i32,
     /// `delta_pic_order_cnt[0]` (type 1, non-IDR, not always-zero).
+    #[allow(dead_code)]
     pub delta_poc0: i32,
     /// `delta_pic_order_cnt[1]`.
+    #[allow(dead_code)]
     pub delta_poc1: i32,
-    /// `num_ref_idx_active_override_flag`.
+    /// `num_ref_idx_active_override_flag`. Folded into
+    /// `num_ref_idx_l0_active` at parse time.
+    #[allow(dead_code)]
     pub num_ref_override: bool,
     /// Effective `num_ref_idx_l0_active` (post-override).
     pub num_ref_idx_l0_active: u32,
@@ -138,12 +147,10 @@ pub(crate) fn parse_header(
                 delta_poc_bottom = br.se()?;
             }
         }
-        1 => {
-            if !sps.delta_pic_order_always_zero {
-                delta_poc0 = br.se()?;
-                if pps.bottom_field_pic_order {
-                    delta_poc1 = br.se()?;
-                }
+        1 if !sps.delta_pic_order_always_zero => {
+            delta_poc0 = br.se()?;
+            if pps.bottom_field_pic_order {
+                delta_poc1 = br.se()?;
             }
         }
         _ => {}
@@ -164,26 +171,22 @@ pub(crate) fn parse_header(
     }
     // ref_pic_list_reordering (spec 7.4.3.1), P slices only (and SI).
     let mut reorder_l0 = alloc::vec::Vec::new();
-    if slice_type == SliceType::P {
-        if br.bit()? {
-            loop {
-                let idc = br.ue()?;
-                if idc > 3 {
-                    return Err(Error::BadValue("reordering_of_pic_nums_idc over 3"));
-                }
-                if idc == 3 {
-                    break;
-                }
-                let v = if idc < 2 {
-                    br.ue()?
-                } else {
-                    br.ue()?
-                };
-                if reorder_l0.len() >= num_ref_idx_l0_active as usize + 2 {
-                    return Err(Error::BadValue("ref_pic_list_reordering too long"));
-                }
-                reorder_l0.push((idc, v));
+    if slice_type == SliceType::P && br.bit()? {
+        loop {
+            let idc = br.ue()?;
+            if idc > 3 {
+                return Err(Error::BadValue("reordering_of_pic_nums_idc over 3"));
             }
+            if idc == 3 {
+                break;
+            }
+            // idc 0/1 take abs_diff_pic_num_minus1, idc 2 takes
+            // long_term_pic_num — both ue(v) in the stream.
+            let v = br.ue()?;
+            if reorder_l0.len() >= num_ref_idx_l0_active as usize + 2 {
+                return Err(Error::BadValue("ref_pic_list_reordering too long"));
+            }
+            reorder_l0.push((idc, v));
         }
     }
     // pred_weight_table for P slices when weighted_pred_flag.
@@ -319,4 +322,3 @@ pub(crate) fn parse_header(
         offset_b,
     })
 }
-

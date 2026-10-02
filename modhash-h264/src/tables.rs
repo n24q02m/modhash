@@ -10,18 +10,12 @@
 
 /// Zig-zag scan for 4x4 blocks (spec Figure 8-8(a)): coefficient scan
 /// position -> raster index `x + 4*y` inside the 4x4 block.
-pub(crate) const ZIGZAG_4X4: [u8; 16] =
-    [0, 1, 4, 8, 5, 2, 3, 6, 9, 12, 13, 10, 7, 11, 14, 15];
-
-/// Inverse of [`ZIGZAG_4X4`]: raster index -> scan position.
-pub(crate) const ZIGZAG_4X4_INV: [u8; 16] =
-    [0, 1, 5, 6, 2, 4, 7, 12, 3, 8, 11, 13, 9, 10, 14, 15];
+pub(crate) const ZIGZAG_4X4: [u8; 16] = [0, 1, 4, 8, 5, 2, 3, 6, 9, 12, 13, 10, 7, 11, 14, 15];
 
 /// Field scan for 4x4 blocks (spec Figure 8-8(b)). Only reachable in
 /// interlaced content; defined for completeness of the table set.
 #[allow(dead_code)]
-pub(crate) const FIELD_4X4: [u8; 16] =
-    [0, 4, 1, 8, 12, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15];
+pub(crate) const FIELD_4X4: [u8; 16] = [0, 4, 1, 8, 12, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15];
 
 /// Chroma DC 2x2 scan (spec 8.5.7): scan index -> `x + 2*y`.
 pub(crate) const SCAN_2X2: [u8; 4] = [0, 1, 2, 3];
@@ -41,11 +35,6 @@ pub(crate) fn block_index(x4: usize, y4: usize) -> usize {
     (y4 / 2 * 2 + x4 / 2) * 4 + (y4 % 2) * 2 + (x4 % 2)
 }
 
-/// Raster 4x4 index (`x4 + 4*y4`, the order intra-4x4 mode parsing and
-/// intra reconstruction use) -> group-major index.
-pub(crate) fn raster_to_block(raster: usize) -> usize {
-    block_index(raster % 4, raster / 4)
-}
 // coded_block_pattern (spec Table 9-4)
 // ------------------------------------------------------------------
 
@@ -203,18 +192,12 @@ pub(crate) const TOTAL_ZEROS_BITS: [[u8; 16]; 15] = [
 /// `total_zeros` VLC for 2x2 chroma DC blocks (spec Table 9-9(a)),
 /// indexed `[total_coeff - 1][zeros]` for total_coeff 1..=3
 /// (total_coeff == 4 leaves no zeros to code).
-pub(crate) const CHROMA_DC_TOTAL_ZEROS_LENS: [[u8; 4]; 3] = [
-    [1, 2, 3, 3],
-    [1, 2, 2, 0],
-    [1, 1, 0, 0],
-];
+pub(crate) const CHROMA_DC_TOTAL_ZEROS_LENS: [[u8; 4]; 3] =
+    [[1, 2, 3, 3], [1, 2, 2, 0], [1, 1, 0, 0]];
 
 /// Code bits paired with [`CHROMA_DC_TOTAL_ZEROS_LENS`].
-pub(crate) const CHROMA_DC_TOTAL_ZEROS_BITS: [[u8; 4]; 3] = [
-    [1, 1, 1, 0],
-    [1, 1, 0, 0],
-    [1, 0, 0, 0],
-];
+pub(crate) const CHROMA_DC_TOTAL_ZEROS_BITS: [[u8; 4]; 3] =
+    [[1, 1, 1, 0], [1, 1, 0, 0], [1, 0, 0, 0]];
 
 // ------------------------------------------------------------------
 // run_before VLC (spec Tables 9-10)
@@ -249,25 +232,28 @@ pub(crate) const RUN_BEFORE_BITS: [[u8; 16]; 7] = [
 // Inverse quantisation (spec 8.5.12.1, Table 8-13 LevelScale4x4)
 // ------------------------------------------------------------------
 
-/// `LevelScale4x4(qP % 6, c)` where `c` indexes the coefficient classes
-/// `{(0,0),(0,2),(2,0),(2,2)}`, `{(0,1),(1,0),(2,1),(1,2)}` and the rest.
+/// `LevelScale4x4(qP % 6, c)` (spec Table 8-12 / eq. 8-335): `c` 0 is
+/// the even/even positions `{(0,0),(0,2),(2,0),(2,2)}`, `c` 1 the
+/// mixed-parity positions, `c` 2 the odd/odd positions — verified
+/// cell-for-cell against FFmpeg `ff_h264_dequant4_coeff_init` and
+/// h264bsd `levelScale`.
 pub(crate) const LEVEL_SCALE_4X4: [[u16; 3]; 6] = [
-    [10, 16, 13],
-    [11, 18, 14],
-    [13, 20, 16],
-    [14, 23, 18],
-    [16, 25, 20],
-    [18, 29, 23],
+    [10, 13, 16],
+    [11, 14, 18],
+    [13, 16, 20],
+    [14, 18, 23],
+    [16, 20, 25],
+    [18, 23, 29],
 ];
 
 /// Coefficient class index for a raster position `(x, y)` inside a 4x4
-/// block: 0 when both coordinates are even, 1 when both are odd, 2
-/// otherwise (spec 8-314 class grouping).
+/// block: 0 when both coordinates are even, 2 when both are odd, 1
+/// otherwise.
 pub(crate) fn scale_class(x: usize, y: usize) -> usize {
     match (x % 2, y % 2) {
         (0, 0) => 0,
-        (1, 1) => 1,
-        _ => 2,
+        (1, 1) => 2,
+        _ => 1,
     }
 }
 
@@ -296,9 +282,9 @@ pub(crate) const QP_DIV6: [u8; 52] = {
 /// Chroma quantisation parameter mapping (spec Table 8-15): `qPc` from
 /// `clip(0, 51, qPy + chroma_qp_index_offset)`.
 pub(crate) const QPC_TABLE: [u8; 52] = [
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
-    27, 28, 29, 29, 30, 31, 32, 32, 33, 34, 34, 35, 35, 36, 36, 37, 37, 37, 38, 38, 38, 39, 39, 39,
-    39,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+    26, 27, 28, 29, 29, 30, 31, 32, 32, 33, 34, 34, 35, 35, 36, 36, 37, 37, 37, 38, 38, 38, 39, 39,
+    39, 39,
 ];
 
 // ------------------------------------------------------------------
@@ -347,8 +333,8 @@ pub(crate) const TC0_TABLE: [[u8; 3]; 52] = [
     [0, 0, 1],
     [0, 0, 1],
     [0, 0, 1],
-    [0, 0, 1],
-    [0, 0, 1],
+    [0, 1, 1],
+    [0, 1, 1],
     [1, 1, 1],
     [1, 1, 1],
     [1, 1, 1],
