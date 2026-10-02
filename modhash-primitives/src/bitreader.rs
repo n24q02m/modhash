@@ -65,6 +65,9 @@ impl<'a> BitReader<'a> {
         if n > self.remaining_bits() {
             return Err(Error::truncated("bits", n, self.remaining_bits()));
         }
+        if n == 0 {
+            return Ok(0);
+        }
         // A request that fits in the unread tail of the current byte is
         // the hot case (Huffman side info is read one bit at a time);
         // the general path assembles the field from whole bytes.
