@@ -20,7 +20,9 @@ fuzz/
 
 Both directories are created empty with the skeleton. Each codec phase
 registers its target name in `TARGET_NAMES` and adds a `dispatch` arm, then
-seeds `corpus/<target>/`.
+seeds `corpus/<target>/`. `corpus/PROVENANCE.md` records where each seed
+came from. Registered corpus targets today: `mp4`, `png`, `jpeg`, `bmp`,
+`audio` (embedded-seed targets `coremode` and `flac` need no corpus).
 
 ## Reproducing a crash
 
