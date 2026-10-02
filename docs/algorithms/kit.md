@@ -31,7 +31,7 @@ magics are checked before their prefixes, so no row shadows another.
 | `66 4C 61 43` (`"fLaC"`) | `Flac` | `Audio` | implemented |
 | `49 44 33` (`"ID3"`), or `FF` + second byte `& E0 == E0` with MPEG version bits `& 18 != 08` and layer bits `& 06 != 00` (and `b[1] != 0xFE`/`0xFF` so UTF-16 BOM and JPEG-ish bytes stay out) | `Mp3` | `Audio` | implemented — `modhash-mp3` landed during the facade phase |
 | 4-byte size + `66 74 79 70` (`"ftyp"` at offset 4) | `Mp4` | `Video` | **`Unsupported`** — `modhash-video`/`modhash-h264` have not landed |
-| `25 50 44 46 2D` (`"%PDF-"`) | `Pdf` | `Text` | **`Unsupported`** — `modhash-pdf` has not landed |
+| `25 50 44 46 2D` (`"%PDF-"`) | `Pdf` | `Text` | implemented — `modhash-pdf` extracts the text layer, which enters the text lane |
 | `50 4B` (`"PK"`) | `Zip` | `Binary` | raw-byte semantics |
 | valid UTF-8, none of the above | `Unknown` | `Text` | implemented |
 | anything else | `Unknown` | `Binary` | implemented |
@@ -40,7 +40,7 @@ Two rules decide the unsupported/binary split, and they are the *only*
 rules:
 
 - A format whose **crate exists in the DAG table but has not landed**
-  (mp4→video, pdf→text; mp3 landed mid-phase and is wired) answers
+  (mp4→video; mp3 and pdf landed after this spec and are wired) answers
   `Error::Unsupported { modality, .. }`
   naming the modality its crate will serve. The slot is named and real;
   the answer is "not yet", not "binary blob".
@@ -108,6 +108,9 @@ do trailing-newline variants and upper/lowercase pairs.
 `content_hash` on text requires `&str` input. The byte-level entry
 `signature(bytes)` / `describe(bytes)` applies `str::from_utf8`; a
 non-UTF-8 input is `Binary`, never a silent lossy decode.
+
+A `Pdf` input contributes `modhash_pdf::extract_text` output — the
+document's text layer, never the container bytes — to this same path.
 
 ### binary
 

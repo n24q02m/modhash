@@ -1,0 +1,47 @@
+# lab/datasets/manifest.toml — external evaluation corpora.
+#
+# Rules (lab/README.md): URL + SHA-256 + license per entry, NOTHING else.
+# Corpora are never vendored into the repository; `fetch_datasets.py`
+# downloads to a cache directory outside the tree and verifies the hash.
+#
+# `sha256` empty means UNPINNED: the fetcher downloads, prints the
+# observed digest, and refuses to install the entry until the digest is
+# committed here. A wrong hash is data corruption; an unpinned hash is
+# honest "not measured yet".
+#
+# Text and binary evaluation pairs are *generated* (see lab/eval.rs and
+# modhash-cli's fixture module) rather than downloaded — there is no
+# canonical public labelled corpus for either, so the kit ships its own
+# deterministic pair generator. The entries below cover the modalities
+# where public labelled data exists.
+
+# INRIA Copydays: 157 original photos with systematically transformed
+# near-duplicates (jpeg-quality, crop, strong attacks). The public
+# ground-truth image-dedup set.
+[[dataset]]
+name = "copydays"
+url = "https://lear.inrialpes.fr/~jegou/data/copydays_original.tar"
+sha256 = ""
+license = "research use (INRIA)"
+modality = "image"
+notes = "Label pairs are formed by construction: original + each transform."
+
+# FMA small: 8000 CC-licensed audio tracks (30 s each). Subset of the
+# Free Music Archive for audio fingerprint evaluation.
+[[dataset]]
+name = "fma-small"
+url = "https://os.unil.cloud.switch.ch/fma/fma_small.zip"
+sha256 = ""
+license = "CC mixed (per-track)"
+modality = "audio"
+notes = "Near-duplicate pairs are constructed by re-encoding; raw tracks are not duplicates of each other."
+
+# A small public H.264/AVC elementary stream for the video lane once it
+# lands (P16). The current workspace does not exercise this entry.
+[[dataset]]
+name = "avc-basic-sp2baseline"
+url = "https://samples.mplayerhq.hu/AVC/basicSp/multi.baseline.000.h264"
+sha256 = ""
+license = "unspecified (test stream)"
+modality = "video"
+notes = "Elementary AVC baseline clip; used by the h264 lane's decode tests, not by lab/bench.rs."

@@ -42,6 +42,9 @@ pub enum Error {
         /// What is missing, e.g. `"modhash-mp3 decoder has not landed"`.
         what: &'static str,
     },
+    /// The PDF text layer's own error type (carries page/object
+    /// attribution and cannot fold into [`modhash_primitives::Error`]).
+    Pdf(modhash_pdf::Error),
     /// The audio facade's own error type (`modhash_audio::Error`
     /// carries a `String` and cannot fold into
     /// [`modhash_primitives::Error`]).
@@ -75,6 +78,10 @@ impl fmt::Display for Error {
                 f.write_str("audio: ")?;
                 fmt::Display::fmt(e, f)
             }
+            Error::Pdf(e) => {
+                f.write_str("text: ")?;
+                fmt::Display::fmt(e, f)
+            }
             Error::BadValue(what) => {
                 f.write_str("bad value: ")?;
                 f.write_str(what)
@@ -84,6 +91,12 @@ impl fmt::Display for Error {
 }
 
 impl core::error::Error for Error {}
+
+impl From<modhash_pdf::Error> for Error {
+    fn from(e: modhash_pdf::Error) -> Self {
+        Error::Pdf(e)
+    }
+}
 
 impl From<modhash_audio::Error> for Error {
     fn from(e: modhash_audio::Error) -> Self {

@@ -18,9 +18,9 @@
 //! - [`match_`] scores two signatures of the same modality;
 //! - [`describe`] returns both tiers plus modality facts in one call.
 //!
-//! Modality slots whose crates have not landed (mp4 video, pdf
-//! text) answer [`Error::Unsupported`] naming the modality — the
-//! slot is real and named, the lane is pending.
+//! Modality slots whose crates have not landed (mp4 video) answer
+//! [`Error::Unsupported`] naming the modality — the slot is real and
+//! named, the lane is pending.
 //!
 //! `no_std` + `alloc`, like its siblings; the fuzz harness is the crate's
 //! only `std` consumer (`src/bin/fuzz.rs`).
@@ -44,6 +44,7 @@ pub use modhash_audio::{
     Index as AudioIndex, Match as AudioMatch, Peak, Signature as AudioSignature,
     build_index as build_audio_index, match_signature as match_audio_signature,
 };
+pub use modhash_index::{Calibration, Profile, calibrate};
 pub use modhash_primitives::{Algorithm, Digest, Format};
 pub use modhash_raster::{Image, Rgb};
 pub use modhash_text::{SIGNATURE_WORDS, canonicalize};
@@ -78,7 +79,7 @@ pub enum Modality {
     Image,
     /// Decoded PCM audio (wav, flac, mp3).
     Audio,
-    /// Canonicalized UTF-8 text (bare text; pdf pending).
+    /// Canonicalized UTF-8 text (bare text and pdf-extracted text).
     Text,
     /// Opaque bytes (zip, unknown, and every non-UTF-8 input).
     Binary,
@@ -159,7 +160,7 @@ pub fn detect(bytes: &[u8]) -> Detection {
         return d(Format::Mp4, Modality::Video, true);
     }
     if bytes.starts_with(b"%PDF-") {
-        return d(Format::Pdf, Modality::Text, true);
+        return d(Format::Pdf, Modality::Text, false);
     }
     if bytes.starts_with(b"PK") {
         return d(Format::Zip, Modality::Binary, false);
@@ -196,7 +197,7 @@ fn pending_err(format: Format, modality: Modality) -> Error {
         (Format::Mp4, _) | (_, Modality::Video) => {
             "modhash-video/mp4+h264 signature lane has not landed"
         }
-        (Format::Pdf, _) => "modhash-pdf text lane has not landed",
+        (Format::Pdf, _) => "modhash-pdf pending flag left stale (bug)",
         _ => "modality lane has not landed",
     };
     Error::Unsupported {
@@ -253,6 +254,24 @@ fn image_to_rgb8<L: modhash_raster::Layout, T: modhash_raster::Sample>(
             }
             _ => px.extend_from_slice(&[sample_u8(p[0]), sample_u8(p[1]), sample_u8(p[2])]),
         }
+    }
+    Image::from_vec(img.width(), img.height(), px).map_err(|e| decode_err(Modality::Image, e))
+}
+
+/// The BT.601 luma plane of a canonical `Image<Rgb, u8>` — the input
+/// the tier-3 features (FAST-9 / rBRIEF) are defined over.
+fn rgb8_to_gray(img: &Image<Rgb, u8>) -> Result<Image<modhash_raster::Gray, u8>> {
+    let n = img.width() as usize * img.height() as usize;
+    let src = img.as_slice();
+    if src.len() != n * 3 {
+        return Err(decode_err(
+            Modality::Image,
+            modhash_primitives::Error::BadValue("decoded image buffer malformed"),
+        ));
+    }
+    let mut px = Vec::with_capacity(n);
+    for p in src.chunks_exact(3) {
+        px.push(modhash_raster::luma_bt601(p[0], p[1], p[2]));
     }
     Image::from_vec(img.width(), img.height(), px).map_err(|e| decode_err(Modality::Image, e))
 }
@@ -371,7 +390,7 @@ fn to_mono(pcm: &Pcm) -> Result<Vec<i32>> {
 ///
 /// # Errors
 ///
-/// [`Error::Unsupported`] on a pending slot (mp4/pdf),
+/// [`Error::Unsupported`] on a pending slot (mp4),
 /// [`Error::Decode`] naming the modality when the container is claimed
 /// but corrupt, never a panic.
 pub fn content_hash(bytes: &[u8]) -> Result<Digest<32>> {
@@ -392,17 +411,35 @@ pub fn content_hash(bytes: &[u8]) -> Result<Digest<32>> {
             }
             buf
         }
-        Modality::Text => match core::str::from_utf8(bytes) {
-            Ok(s) => canonicalize(s).into_bytes(),
-            // detect() already proved UTF-8; an impossible state still
-            // answers with an error rather than silently hashing bytes.
-            Err(_) => {
-                return Err(Error::BadValue("text input failed UTF-8 recheck"));
+        Modality::Text => {
+            let text = text_content(bytes, det.format)?;
+            match core::str::from_utf8(text.as_ref()) {
+                Ok(s) => canonicalize(s).into_bytes(),
+                // Pdf extraction is UTF-8 by construction; an impossible
+                // state still answers with an error rather than silently
+                // hashing bytes.
+                Err(_) => {
+                    return Err(Error::BadValue("text input failed UTF-8 recheck"));
+                }
             }
-        },
+        }
         Modality::Binary | Modality::Video => bytes.to_vec(),
     };
     modhash_primitives::sha256(&payload).map_err(|e| decode_err(det.modality, e))
+}
+
+/// The text a modality pipelines over: the raw UTF-8 bytes for bare
+/// text, `modhash_pdf::extract_text` output for a PDF container.
+///
+/// `alloc::borrow::Cow` keeps the bare-text path allocation-free while
+/// letting pdf hand back an owned `String`.
+fn text_content(bytes: &[u8], format: Format) -> Result<alloc::borrow::Cow<'_, [u8]>> {
+    match format {
+        Format::Pdf => modhash_pdf::extract_text(bytes)
+            .map_err(Error::Pdf)
+            .map(|s| alloc::borrow::Cow::Owned(s.into_bytes())),
+        _ => Ok(alloc::borrow::Cow::Borrowed(bytes)),
+    }
 }
 
 // ---------------------------------------------------------------------
@@ -489,15 +526,17 @@ impl Signature {
 
 /// Computes the tier-2 signature of `bytes`, routing on [`detect`].
 ///
-/// Pending slots (mp4, pdf) answer [`Error::Unsupported`] naming
+/// Pending slots (mp4 video) answer [`Error::Unsupported`] naming
 /// the modality. Non-UTF-8, non-container input is `Binary`; valid
-/// UTF-8 without a container magic is `Text`.
+/// UTF-8 without a container magic is `Text`; a PDF contributes its
+/// extracted text to the `Text` lane.
 ///
 /// # Errors
 ///
 /// [`Error::Decode`] naming the modality on corrupt containers,
 /// [`Error::Audio`] for the audio pipeline's own errors (a WAV at the
-/// wrong sample rate is `Unsupported` inside it — named, not silent).
+/// wrong sample rate is `Unsupported` inside it — named, not silent),
+/// [`Error::Pdf`] when the PDF text layer rejects the document.
 pub fn signature(bytes: &[u8]) -> Result<Signature> {
     let det = detect(bytes);
     if det.pending {
@@ -509,10 +548,13 @@ pub fn signature(bytes: &[u8]) -> Result<Signature> {
             phash::image_phash(&img).map(Signature::Image)
         }
         Modality::Audio => audio_signature(&decode_audio(bytes, det.format)?).map(Signature::Audio),
-        Modality::Text => match core::str::from_utf8(bytes) {
-            Ok(s) => Ok(Signature::Text(modhash_text::signature(s))),
-            Err(_) => binary_signature(bytes).map(Signature::Binary),
-        },
+        Modality::Text => {
+            let text = text_content(bytes, det.format)?;
+            match core::str::from_utf8(text.as_ref()) {
+                Ok(s) => Ok(Signature::Text(modhash_text::signature(s))),
+                Err(_) => binary_signature(text.as_ref()).map(Signature::Binary),
+            }
+        }
         Modality::Binary | Modality::Video => binary_signature(bytes).map(Signature::Binary),
     }
 }
@@ -577,12 +619,15 @@ pub fn image_phash<L: modhash_raster::Layout, T: modhash_raster::Sample>(
 /// Modality-specific facts a [`Description`] surfaces.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Facts {
-    /// Decoded image geometry.
+    /// Decoded image geometry plus the tier-3 feature count.
     Image {
         /// Width in pixels.
         width: u32,
         /// Height in pixels.
         height: u32,
+        /// FAST-9 keypoints found on the luma plane — the tier-3
+        /// feature pool rBRIEF describes (spec §4.3).
+        keypoints: usize,
     },
     /// Decoded stream parameters.
     Audio {
@@ -639,9 +684,17 @@ impl fmt::Display for Description {
             self.modality, self.format, self.tier1
         )?;
         match (&self.signature, &self.facts) {
-            (Signature::Image(p), Facts::Image { width, height }) => {
-                write!(f, "tier2: phash {p:#018x}\nimage: {width}x{height}px")
-            }
+            (
+                Signature::Image(p),
+                Facts::Image {
+                    width,
+                    height,
+                    keypoints,
+                },
+            ) => write!(
+                f,
+                "tier2: phash {p:#018x}\ntier3: orb keypoints={keypoints}\nimage: {width}x{height}px"
+            ),
             (
                 Signature::Audio(_),
                 Facts::Audio {
@@ -702,6 +755,8 @@ pub fn describe(bytes: &[u8]) -> Result<Description> {
         Modality::Image => {
             let img = decode_image_rgb8(bytes, det.format)?;
             let p = phash::image_phash(&img)?;
+            let gray = rgb8_to_gray(&img)?;
+            let keypoints = modhash_tier3::orb::fast9(&gray).len();
             Ok(Description {
                 format: det.format,
                 modality: Modality::Image,
@@ -710,6 +765,7 @@ pub fn describe(bytes: &[u8]) -> Result<Description> {
                 facts: Facts::Image {
                     width: img.width(),
                     height: img.height(),
+                    keypoints,
                 },
             })
         }
@@ -731,12 +787,13 @@ pub fn describe(bytes: &[u8]) -> Result<Description> {
         }
         Modality::Text => {
             let sig = signature(bytes)?;
-            let (words, canonical_len) = match core::str::from_utf8(bytes) {
+            let text = text_content(bytes, det.format)?;
+            let (words, canonical_len) = match core::str::from_utf8(text.as_ref()) {
                 Ok(s) => {
                     let canon = canonicalize(s);
                     (canon.split_whitespace().count(), canon.len())
                 }
-                Err(_) => (0, bytes.len()),
+                Err(_) => (0, text.len()),
             };
             Ok(Description {
                 format: det.format,

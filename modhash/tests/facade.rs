@@ -42,7 +42,7 @@ fn phash_matches_python_oracle_exactly() {
             got, want,
             "{name}: pHash {got:#018x} != oracle {want:#018x}"
         );
-        let Facts::Image { width, height } = desc.facts else {
+        let Facts::Image { width, height, .. } = desc.facts else {
             panic!("{name}: not image facts")
         };
         assert_eq!((width, height), (w, h), "{name}");
@@ -347,8 +347,8 @@ fn mp3_decodes_through_audio_lane() {
     assert_eq!(detect(&[0xFF, 0xFB, 0x90, 0x00]).format, Format::Mp3);
 }
 
-/// Pending slots name their modality and refuse: mp4 → video, pdf →
-/// text. Never a panic, never a silent binary hash.
+/// The one remaining pending slot — mp4 → video — names its modality
+/// and refuses. Never a panic, never a silent binary hash.
 #[test]
 fn pending_slots_are_named_unsupported() {
     let mut mp4 = vec![0, 0, 0, 0x20];
@@ -370,15 +370,37 @@ fn pending_slots_are_named_unsupported() {
         other => panic!("mp4 content_hash must be Unsupported(video), got {other:?}"),
     }
 
+    // pdf's text lane has landed: a gutted container is a Pdf decode
+    // error naming the text modality, not an Unsupported refusal.
     let pdf = b"%PDF-1.7\nbody".to_vec();
     match describe(&pdf) {
-        Err(Error::Unsupported {
-            modality: Modality::Text,
-            format: Format::Pdf,
-            ..
-        }) => {}
-        other => panic!("pdf must be Unsupported(text), got {other:?}"),
+        Err(Error::Pdf(_)) => {}
+        other => panic!("corrupt pdf must be Error::Pdf, got {other:?}"),
     }
+}
+
+/// pdf extracts its text layer into the text lane: tier-1 hashes the
+/// canonicalized extraction, tier-2 signs it with MinHash.
+#[test]
+fn pdf_text_flows_through_text_lane() {
+    let pdf = fixture("text_page.pdf");
+    let d = detect(&pdf);
+    assert_eq!(
+        (d.format, d.modality, d.pending),
+        (Format::Pdf, Modality::Text, false)
+    );
+    let desc = describe(&pdf).expect("text_page.pdf must describe");
+    let Facts::Text {
+        words,
+        canonical_len,
+    } = desc.facts
+    else {
+        panic!("pdf must report text facts")
+    };
+    assert!(words > 0 && canonical_len > 0, "pdf text must be non-empty");
+    assert!(matches!(desc.signature, Signature::Text(_)));
+    // Two tier-1 calls agree — extraction is deterministic.
+    assert_eq!(content_hash(&pdf).unwrap(), desc.tier1);
 }
 
 /// Corrupt claims on implemented formats are Decode errors naming the

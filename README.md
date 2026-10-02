@@ -4,9 +4,12 @@ A zero-dependency hashing kit for Rust: content hashes for files, perceptual
 hashes for images, text, audio and video, and an index layer for similarity
 search. Every crate resolves with an empty `[dependencies]` table.
 
-> **Status: skeleton.** The workspace, its policy gates and CI are in place. No
-> codec is implemented yet; each crate's API is specified in `docs/algorithms/`
-> and lands in the phase that owns it.
+> **Status: 18 of 23 crates implemented.** The `modhash` CLI covers
+> images, audio, text (including PDF text), and binary inputs end to
+> end; the video lane (`modhash-h264`/`modhash-video`) is the remaining
+> gap and reports itself `pending` rather than guessing. See
+> [docs/limits.md](docs/limits.md) for the exact codec-scope table and
+> [docs/index.md](docs/index.md) for the public documentation.
 
 ## Why zero-dependency
 

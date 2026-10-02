@@ -10,6 +10,8 @@ Benchmarks and accuracy evaluation for the kit. Not published on crates.io.
 | `eval.rs` | accuracy against labelled sets |
 | `datasets/manifest.toml` | dataset references: URL, SHA-256, license |
 | `fetch_datasets.py` | downloads and verifies the referenced datasets |
+| `smoke_all_formats.sh` | end-to-end CLI run over every landed §4.5 format |
+| `smoke-fixtures/` | small committed inputs for the smoke script |
 
 ## Rules
 
@@ -30,7 +32,24 @@ exception to a rule about reproducible fingerprints.
 the build was `release`. A throughput number without those is not comparable
 to anything.
 
-## Not yet implemented
+## How to run
 
-`lab` is created empty in the workspace skeleton. `bench.rs` and `eval.rs`
-land with the CLI phase (P18), when there is something to measure.
+```bash
+# library-level throughput (in-process, release profile)
+cargo run --release -p modhash-cli -- bench
+
+# CLI end-to-end latency (spawn + IO + all tiers)
+cargo build --release -p modhash-cli
+rustc -O lab/bench.rs -o target/release/lab-bench
+./target/release/lab-bench target/release/modhash
+
+# accuracy on a labelled pairs file
+rustc -O lab/eval.rs -o target/release/lab-eval
+./target/release/lab-eval pairs.csv target/release/modhash
+
+# every landed format, end to end
+bash lab/smoke_all_formats.sh
+```
+
+`lab/smoke-fixtures/` holds the small committed inputs the smoke script
+exercises; they are fixtures, not corpora — see its `PROVENANCE.md`.
