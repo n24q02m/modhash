@@ -347,27 +347,28 @@ fn mp3_decodes_through_audio_lane() {
     assert_eq!(detect(&[0xFF, 0xFB, 0x90, 0x00]).format, Format::Mp3);
 }
 
-/// The one remaining pending slot — mp4 → video — names its modality
-/// and refuses. Never a panic, never a silent binary hash.
+/// mp4 has landed: detection names the video slot, a gutted container
+/// is a Decode error naming the video modality, and pdf — the last
+/// other landed slot — keeps its own error type. Never a panic, never
+/// a silent binary hash.
 #[test]
-fn pending_slots_are_named_unsupported() {
+fn landed_slots_report_decode_errors_not_pending() {
     let mut mp4 = vec![0, 0, 0, 0x20];
     mp4.extend_from_slice(b"ftypisom");
     mp4.extend_from_slice(&[0; 24]);
     match signature(&mp4) {
-        Err(Error::Unsupported {
+        Err(Error::Decode {
             modality: Modality::Video,
-            format: Format::Mp4,
             ..
         }) => {}
-        other => panic!("mp4 must be Unsupported(video), got {other:?}"),
+        other => panic!("gutted mp4 must be Decode(video), got {other:?}"),
     }
     match content_hash(&mp4) {
-        Err(Error::Unsupported {
+        Err(Error::Decode {
             modality: Modality::Video,
             ..
         }) => {}
-        other => panic!("mp4 content_hash must be Unsupported(video), got {other:?}"),
+        other => panic!("mp4 content_hash must be Decode(video), got {other:?}"),
     }
 
     // pdf's text lane has landed: a gutted container is a Pdf decode
@@ -377,6 +378,89 @@ fn pending_slots_are_named_unsupported() {
         Err(Error::Pdf(_)) => {}
         other => panic!("corrupt pdf must be Error::Pdf, got {other:?}"),
     }
+}
+
+/// The video lane end to end: an ffmpeg-generated mp4 detects as
+/// video, both tiers answer, `describe` reports real frame facts, and
+/// the same stream remuxed to mov fingerprints identically.
+#[test]
+fn mp4_decodes_through_video_lane() {
+    let mp4 = fixture("a_64x48.mp4");
+    let d = detect(&mp4);
+    assert_eq!(
+        (d.format, d.modality, d.pending),
+        (Format::Mp4, Modality::Video, false)
+    );
+    let desc = describe(&mp4).expect("a_64x48.mp4 must describe");
+    let Facts::Video {
+        width,
+        height,
+        duration_s,
+        frames_sampled,
+    } = desc.facts
+    else {
+        panic!("mp4 must report video facts")
+    };
+    assert_eq!((width, height), (64, 48));
+    assert_eq!(duration_s, 4.0);
+    assert_eq!(frames_sampled, 8);
+    let Signature::Video(v) = &desc.signature else {
+        panic!("mp4 must carry a video signature")
+    };
+    assert_eq!(v.frame_hashes.len(), 8);
+    assert_eq!(v.minhash.len(), modhash::SIGNATURE_WORDS);
+    // Tier-1 the facade reports is the fingerprint's content digest —
+    // describe and content_hash agree on the same input.
+    assert_eq!(content_hash(&mp4).unwrap(), desc.tier1);
+
+    // The same elementary stream remuxed to mov: identical signature,
+    // identical tier-1, match score 1.0 through the facade.
+    let mov = signature(&fixture("a_64x48.mov")).unwrap();
+    let outcome = match_(&desc.signature, &mov).unwrap();
+    let MatchOutcome::Video { score, matched, .. } = outcome else {
+        panic!("video match must be MatchOutcome::Video")
+    };
+    assert_eq!(score, 1.0);
+    assert!(matched);
+
+    // A non-AVC video track refuses by name — Unsupported naming the
+    // video modality, not a decode panic.
+    match signature(&fixture("e_mp4v.mp4")) {
+        Err(Error::Decode {
+            modality: Modality::Video,
+            source: modhash_primitives::Error::Unsupported(_),
+        }) => {}
+        other => panic!("mp4v must be Decode(video, Unsupported), got {other:?}"),
+    }
+
+    // Display prints the video facts line.
+    let s = desc.to_string();
+    assert!(s.contains("modality: video"), "{s}");
+    assert!(s.contains("video: 64x48px"), "{s}");
+}
+
+/// The video lane's per-frame hash is bit-identical to the kit's image
+/// pHash on the same luma plane — the two implementations of kit.md §3
+/// must agree exactly, since modhash-video re-implements the DCT step
+/// it cannot import (no modhash-math edge in the DAG table).
+#[test]
+fn video_frame_phash_matches_image_phash() {
+    use modhash_raster::{Gray, Image};
+    // A deterministic non-trivial luma plane.
+    let mut rng = modhash_primitives::SplitMix64::new(0xA11);
+    let plane: Vec<u8> = (0..64 * 48).map(|_| rng.next_u64() as u8).collect();
+    let img = Image::<Gray, u8>::from_vec(64, 48, plane.clone()).unwrap();
+    assert_eq!(
+        modhash_video::frame_phash(64, 48, &plane).unwrap(),
+        modhash::image_phash(&img).unwrap()
+    );
+    // A second shape: gradient instead of noise.
+    let plane: Vec<u8> = (0..32 * 24).map(|i| ((i * 7) % 256) as u8).collect();
+    let img = Image::<Gray, u8>::from_vec(32, 24, plane.clone()).unwrap();
+    assert_eq!(
+        modhash_video::frame_phash(32, 24, &plane).unwrap(),
+        modhash::image_phash(&img).unwrap()
+    );
 }
 
 /// pdf extracts its text layer into the text lane: tier-1 hashes the

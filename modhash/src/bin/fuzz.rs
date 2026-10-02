@@ -55,7 +55,7 @@ impl SplitMix64 {
 /// file-based. Embedded-seed targets keep their seed in the arm.
 /// `png`/`jpeg`/`bmp`/`audio` were seeded by the facade phase — see
 /// `fuzz/corpus/PROVENANCE.md`.
-const TARGET_NAMES: &[&str] = &["mp4", "flac", "png", "jpeg", "bmp", "audio"];
+const TARGET_NAMES: &[&str] = &["mp4", "h264", "flac", "png", "jpeg", "bmp", "audio"];
 
 fn apply(mode: &str, rng: &mut SplitMix64, input: &[u8]) -> Vec<u8> {
     match mode {
@@ -100,7 +100,15 @@ fn dispatch(target: &str, rng: &mut SplitMix64, iters: usize, seed: u64) -> Resu
     match target {
         "coremode" => fuzz_coremode(rng, iters, seed),
         "mp4" => fuzz_codec(rng, iters, seed, "mp4", |bytes| {
-            modhash_mp4::demux(bytes).map(|_| ())
+            // The container demuxer plus the video lane above it:
+            // demux, the facade signature path and the full fingerprint
+            // all see every mutated input.
+            modhash_mp4::demux(bytes)?;
+            let _ = modhash::signature(bytes);
+            modhash_video::decode(bytes, &modhash_video::Limits::default()).map(|_| ())
+        }),
+        "h264" => fuzz_codec(rng, iters, seed, "h264", |bytes| {
+            modhash_h264::decode(bytes).map(|_| ())
         }),
         "flac" => fuzz_flac(rng, iters, seed),
         "png" => fuzz_codec(rng, iters, seed, "png", |bytes| {

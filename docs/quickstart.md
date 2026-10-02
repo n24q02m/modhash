@@ -35,7 +35,7 @@ The facade is `no_std` + `alloc`; the CLI is `std`.
 
 ## What lands today
 
-png · bmp · jpeg · wav · flac · mp3 · pdf · zip (binary semantics) ·
-bare text · opaque binary. mp4 video is detected and reports
-`pending: true` — its lane (`modhash-video`/`modhash-h264`) has not
-landed. See [limits](limits.md) for the exact codec scope.
+png · bmp · jpeg · wav · flac · mp3 · pdf · mp4/mov (h264 baseline) ·
+zip (binary semantics) · bare text · opaque binary. Every lane in the
+DAG table is live; out-of-scope codecs refuse by name. See
+[limits](limits.md) for the exact codec scope.

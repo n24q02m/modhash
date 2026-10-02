@@ -30,7 +30,7 @@ magics are checked before their prefixes, so no row shadows another.
 | `52 49 46 46` + `57 41 56 45` at offset 8 | `Wav` | `Audio` | implemented |
 | `66 4C 61 43` (`"fLaC"`) | `Flac` | `Audio` | implemented |
 | `49 44 33` (`"ID3"`), or `FF` + second byte `& E0 == E0` with MPEG version bits `& 18 != 08` and layer bits `& 06 != 00` (and `b[1] != 0xFE`/`0xFF` so UTF-16 BOM and JPEG-ish bytes stay out) | `Mp3` | `Audio` | implemented — `modhash-mp3` landed during the facade phase |
-| 4-byte size + `66 74 79 70` (`"ftyp"` at offset 4) | `Mp4` | `Video` | **`Unsupported`** — `modhash-video`/`modhash-h264` have not landed |
+| 4-byte size + `66 74 79 70` (`"ftyp"` at offset 4) | `Mp4` | `Video` | implemented — `modhash-video` over `modhash-h264` |
 | `25 50 44 46 2D` (`"%PDF-"`) | `Pdf` | `Text` | implemented — `modhash-pdf` extracts the text layer, which enters the text lane |
 | `50 4B` (`"PK"`) | `Zip` | `Binary` | raw-byte semantics |
 | valid UTF-8, none of the above | `Unknown` | `Text` | implemented |
@@ -40,7 +40,7 @@ Two rules decide the unsupported/binary split, and they are the *only*
 rules:
 
 - A format whose **crate exists in the DAG table but has not landed**
-  (mp4→video; mp3 and pdf landed after this spec and are wired) answers
+  (mp4→video; mp3, pdf and video landed after this spec and are wired) answers
   `Error::Unsupported { modality, .. }`
   naming the modality its crate will serve. The slot is named and real;
   the answer is "not yet", not "binary blob".
@@ -155,6 +155,23 @@ the canonical text (documents under 3 words use `k = n`). Distance is
 The NFC/NFD guarantee of tier 1 holds at tier 2: the signature is
 computed *after* canonicalization, so equivalent spellings produce
 identical signatures, not merely similar ones.
+
+## 4b. Tier 2 — video (spec §4.2)
+
+`signature(bytes)` on an mp4/mov container is
+`modhash_video::decode` — ISO-BMFF demux, H.264 baseline decode, frames
+sampled at a fixed **2 fps** (`slot = floor(2·pts/timescale)`, first
+frame per slot, presentation order), the §3 pHash per kept frame, then
+MinHash-128 over consecutive 3-frame-hash shingles of the chain.
+
+`match` is the **fraction of temporally aligned frames** matching:
+index-wise over `min(len)`, a frame pair matching when Hamming ≤ 10 —
+the §3 image bound; `matched` is advisory at `score ≥ 0.8`. The MinHash
+Jaccard is reported alongside (`MatchOutcome::Video`).
+
+Tier-1 for video is `VideoFingerprint::content_digest`: SHA-256 over
+`w ∥ h ∥ n` then each decoded frame's `sha256(y ∥ cb ∥ cr)` in
+presentation order — a chained digest, memory-bounded.
 
 ## 5. Tier 2 — binary
 
