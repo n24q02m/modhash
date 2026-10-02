@@ -167,3 +167,18 @@ fn bitreader_byte_align_and_byte() {
     r.bits(1).unwrap();
     assert!(r.byte().is_err());
 }
+
+#[test]
+fn bitreader_zero_width_read_is_zero_at_any_position() {
+    // Zero-width reads are legal no-ops (pre-fast-path semantics) at
+    // byte-aligned AND mid-byte positions; they must not shift the stream.
+    let mut r = BitReader::new(&[0xA6, 0x50]);
+    assert_eq!(r.bits(0).unwrap(), 0);
+    assert_eq!(r.bits(3).unwrap(), 0b101);
+    assert_eq!(r.bits(0).unwrap(), 0);
+    assert_eq!(r.bits(5).unwrap(), 0b0_0110);
+    // Position unchanged by the interleaved zero-width reads.
+    let mut r = BitReader::new(&[0xA6, 0x50]);
+    r.bits(0).unwrap();
+    assert_eq!(r.bits(12).unwrap(), 0xA65);
+}

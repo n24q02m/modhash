@@ -37,3 +37,12 @@ homepage = "https://github.com/n24q02m/modhash"
 [profile.release]
 lto = true
 codegen-units = 1
+
+# Test binaries are exercising codec inner loops (Huffman walk, polyphase
+# MACs) under `-O0`, which is unrealistically slow for fuzz-shaped tests:
+# a single MP3 frame decode costs ~22 ms unoptimized and hostile-input
+# scans multiply that by hundreds. Optimizing test builds keeps the
+# conformance suite's runtime in seconds without touching debug gating
+# (debug-assertions stay on, so arithmetic-overflow checks still fire).
+[profile.test]
+opt-level = 2

@@ -65,12 +65,40 @@ impl<'a> BitReader<'a> {
         if n > self.remaining_bits() {
             return Err(Error::truncated("bits", n, self.remaining_bits()));
         }
-        let mut value = 0u64;
-        for _ in 0..n {
-            let bit = (self.data[self.pos / 8] >> (7 - self.pos % 8)) & 1;
-            value = (value << 1) | u64::from(bit);
-            self.pos += 1;
+        if n == 0 {
+            return Ok(0);
         }
+        // A request that fits in the unread tail of the current byte is
+        // the hot case (Huffman side info is read one bit at a time);
+        // the general path assembles the field from whole bytes.
+        if n <= 8 - (self.pos % 8) {
+            let off = self.pos % 8;
+            let byte = self.data[self.pos / 8];
+            // Shift the wanted field to the bottom, then mask it.
+            // `0xFF >> (8 - n)` avoids the u8-shift overflow at n == 8.
+            let v = (byte >> (8 - off - n)) & (0xFFu8 >> (8 - n));
+            self.pos += n;
+            return Ok(u64::from(v));
+        }
+        let byte_pos = self.pos / 8;
+        let head_bits = (8 - self.pos % 8) % 8; // bits to the byte edge
+        let mut value = if head_bits == 0 {
+            0u64
+        } else {
+            u64::from(self.data[byte_pos] & ((1u8 << head_bits) - 1))
+        };
+        let mut left = n - head_bits;
+        let mut i = byte_pos + usize::from(head_bits != 0);
+        while left >= 8 {
+            value = (value << 8) | u64::from(self.data[i]);
+            i += 1;
+            left -= 8;
+        }
+        if left > 0 {
+            let v = self.data[i] >> (8 - left);
+            value = (value << left) | u64::from(v);
+        }
+        self.pos += n;
         Ok(value)
     }
 
