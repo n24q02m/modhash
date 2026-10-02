@@ -13,6 +13,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  administration: write
 
 concurrency:
   group: pages
@@ -29,6 +30,8 @@ jobs:
       - name: Render site
         run: python docs/render.py docs docs/_site
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs/_site
