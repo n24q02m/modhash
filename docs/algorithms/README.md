@@ -18,6 +18,7 @@ A file lands here in the same phase that owns its crate, and the crate's
 | `modhash-math` | §4.3 of the design spec | not started |
 | `modhash-raster` | §4.4 of the design spec | not started |
 | `modhash-audio` | §4.2 of the design spec | not started |
+| `modhash-fastcdc` | `fastcdc.md` | implemented |
 | the rest | — | not started |
 
 ## What a specification must contain
