@@ -388,7 +388,7 @@ fn header_tables_match_spec() {
     // frame-length formula of §2.4.2.3 — built as raw 32-bit fields so
     // a mis-ordered table entry is pinned by construction, not by
     // comparing against the decoder's own tables.
-    use modhash_mp3::{Header, Layer};
+    use modhash_mp3::Header;
     const BR1: [u32; 15] = [
         32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, 0,
     ];
@@ -423,6 +423,9 @@ fn header_tables_match_spec() {
         }
     }
     // Layer III's reserved-field errors must be named, not panics.
+    // `(0 << n)` keeps the bit position readable where the field itself
+    // is what fails.
+    #[allow(clippy::identity_op)]
     for w in [
         0x0000_0000u32,                      // no sync
         0xFFE0_0000 | (2 << 19),             // reserved version bits

@@ -11951,9 +11951,9 @@ mod tests {
             );
         }
         // … held at 1 for six taps …
-        for i in 18..24 {
+        for (i, &tap) in W_START.iter().enumerate().take(24).skip(18) {
             assert!(
-                (W_START[i] - 1.0).abs() < 1e-7,
+                (tap - 1.0).abs() < 1e-7,
                 "start window must hold 1 at tap {i}"
             );
         }
@@ -11965,8 +11965,8 @@ mod tests {
             );
         }
         // … then silence.
-        for i in 30..36 {
-            assert_eq!(W_START[i], 0.0, "start window ends in zeros");
+        for &tap in W_START.iter().skip(30) {
+            assert_eq!(tap, 0.0, "start window ends in zeros");
         }
         // Stop is the mirror image.
         for i in 0..36 {
@@ -11982,7 +11982,7 @@ mod tests {
                 "long window must be symmetric at tap {i}"
             );
         }
-        assert!(W_LONG[0] < W_LONG[17], "long window rises to its middle");
+        const { assert!(W_LONG[0] < W_LONG[17], "long window rises to its middle") }
         // The short window is a 12-tap symmetric pulse strictly inside
         // (0,1), used three times per short block.
         assert_eq!(W_SHORT.len(), 12);
