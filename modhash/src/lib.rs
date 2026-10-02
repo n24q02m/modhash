@@ -17,6 +17,7 @@
 //!   binary;
 //! - [`match_`] scores two signatures of the same modality;
 //! - [`describe`] returns both tiers plus modality facts in one call.
+//!
 //! Every modality slot named in the DAG table is wired: mp4 video
 //! lands through `modhash-video` (mp4 demux → h264 decode → 2 fps
 //! frame pHash chain → MinHash, spec §4.2).

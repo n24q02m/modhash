@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- `modhash-video` (#16): ISO-BMFF video fingerprint — mp4/mov demux
+  (`modhash-mp4`), H.264 baseline decode (`modhash-h264`), frames
+  sampled at a fixed 2 fps (`floor(2·pts/timescale)`, first frame per
+  slot, presentation order), the kit pHash per kept frame, MinHash-128
+  over consecutive 3-frame-hash shingles; `video_match` scores the
+  temporally aligned fraction within Hamming ≤ 10. Wired through the
+  `modhash` facade (`Signature::Video`, `Facts::Video`,
+  `MatchOutcome::Video`) and the CLI; fuzz targets `mp4` and `h264`.
+  Fragmented MP4, non-AVC codecs and above-baseline streams refuse by
+  name.
 
 ## [0.1.0] - unreleased
 

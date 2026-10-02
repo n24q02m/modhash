@@ -226,7 +226,7 @@ fn limits_are_enforced() {
 #[test]
 fn mutated_mp4_never_panics() {
     let file = fixture("tiny_16x16.mp4");
-    let mut rng = SplitMix64::new(0xB17F_11F);
+    let mut rng = SplitMix64::new(0x0B17_F11F);
     let mut ok = 0usize;
     for _ in 0..20_000 {
         let mut bad = file.clone();

@@ -110,6 +110,7 @@ fn dispatch(target: &str, rng: &mut SplitMix64, iters: usize, seed: u64) -> Resu
         "h264" => fuzz_codec(rng, iters, seed, "h264", |bytes| {
             modhash_h264::decode(bytes).map(|_| ())
         }),
+        "flac" => fuzz_flac(rng, iters, seed),
         "png" => fuzz_codec(rng, iters, seed, "png", |bytes| {
             // The decoder plus the facade's image lane above it.
             let _ = modhash::signature(bytes);
