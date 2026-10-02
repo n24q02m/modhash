@@ -190,4 +190,5 @@ name = "modhash-zip"
 version = "0.1.0"
 dependencies = [
  "modhash-inflate",
+ "modhash-primitives",
 ]

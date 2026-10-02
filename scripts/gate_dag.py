@@ -72,7 +72,7 @@ EXPECTED_EDGES = {
     "modhash-mp4": ["modhash-primitives"],
     "modhash-h264": ["modhash-primitives", "modhash-math", "modhash-raster"],
     "modhash-video": ["modhash-primitives", "modhash-raster", "modhash-text", "modhash-mp4", "modhash-h264"],
-    "modhash-zip": ["modhash-inflate"],
+    "modhash-zip": ["modhash-primitives", "modhash-inflate"],
     "modhash-pdf": ["modhash-primitives", "modhash-inflate", "modhash-text"],
     "modhash-tier3": ["modhash-math", "modhash-raster"],
     "modhash-index": ["modhash-primitives"],
