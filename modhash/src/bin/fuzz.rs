@@ -14,8 +14,8 @@
 #![deny(missing_docs)]
 
 use std::fmt::Write as _;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::process::ExitCode;
-
 /// The four mutation modes every target is fuzzed with.
 const MODES: [&str; 4] = ["random", "truncate", "bitflip", "repeat-insert"];
 
@@ -52,7 +52,7 @@ impl SplitMix64 {
 ///
 /// The skeleton registers none: no codec has an implementation yet. Each
 /// owning phase appends its own name and a matching arm in `dispatch`.
-const TARGET_NAMES: &[&str] = &[];
+const TARGET_NAMES: &[&str] = &["flac"];
 
 fn apply(mode: &str, rng: &mut SplitMix64, input: &[u8]) -> Vec<u8> {
     match mode {
@@ -96,6 +96,7 @@ fn apply(mode: &str, rng: &mut SplitMix64, input: &[u8]) -> Vec<u8> {
 fn dispatch(target: &str, rng: &mut SplitMix64, iters: usize, seed: u64) -> Result<(), String> {
     match target {
         "coremode" => fuzz_coremode(rng, iters, seed),
+        "flac" => fuzz_flac(rng, iters, seed),
         other if TARGET_NAMES.contains(&other) => Err(format!(
             "target {other} is registered but has no corpus wired yet"
         )),
@@ -148,6 +149,50 @@ fn fuzz_coremode(rng: &mut SplitMix64, iters: usize, seed: u64) -> Result<(), St
             corpus.len()
         );
     }
+    Ok(())
+}
+
+/// Fuzzes `modhash-flac`'s decoder entry point.
+///
+/// The corpus starts from a complete, checksum-valid stream (a mono
+/// 16-bit 44.1 kHz stream with one 8-sample verbatim frame, built
+/// bit-for-bit by the crate's own test harness) and is mutated in place,
+/// so most iterations land inside the format rather than bouncing off
+/// the `fLaC` signature check. The decoder's contract is that every
+/// input returns `Ok` or `Err` - the only hard failure is a panic, so
+/// each call runs inside `catch_unwind` to turn one into a located
+/// report instead of an abort.
+fn fuzz_flac(rng: &mut SplitMix64, iters: usize, seed: u64) -> Result<(), String> {
+    /// A complete valid stream: fLaC + STREAMINFO + one verbatim frame.
+    const SEED_STREAM: &[u8] = &[
+        0x66, 0x4c, 0x61, 0x43, 0x80, 0x00, 0x00, 0x22, 0x00, 0xc0, 0x12, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x0a, 0xc4, 0x40, 0xf0, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xf8, 0x60, 0x00, 0x00, 0x07, 0xff,
+        0x02, 0x00, 0x01, 0xff, 0xfe, 0x00, 0x03, 0xff, 0xfc, 0x00, 0x05, 0xff, 0xfa, 0x00, 0x07,
+        0xff, 0xf8, 0xaf, 0x0b,
+    ];
+    let mut corpus: Vec<u8> = SEED_STREAM.to_vec();
+    for i in 0..iters {
+        let mode = MODES[i % MODES.len()];
+        corpus = apply(mode, rng, &corpus);
+        // Mutations can grow the corpus; cap it so the decode stays
+        // inside `modhash_flac::Limits::default().max_input` and every
+        // iteration exercises parsing, not the input-length ceiling.
+        if corpus.len() > 1024 {
+            corpus.truncate(1024);
+        }
+        let input = corpus.clone();
+        let outcome = catch_unwind(AssertUnwindSafe(|| {
+            modhash_flac::decode(&input, &modhash_flac::Limits::default())
+        }));
+        if outcome.is_err() {
+            return Err(format!(
+                "flac panicked at iter {i} (mode {mode}, seed {seed}), input {} B",
+                corpus.len()
+            ));
+        }
+    }
+    println!("flac: {iters} iters, seed {seed}, no panic");
     Ok(())
 }
 

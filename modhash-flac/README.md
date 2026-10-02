@@ -1,10 +1,21 @@
 # `modhash-flac`
 
-FLAC subset decoding: constant and verbatim subframes, both Rice methods.
+FLAC subset decoding per RFC 9639: STREAMINFO, constant and verbatim
+subframes, fixed predictors of orders 0-4, and both Rice residual methods
+(4-bit and 5-bit parameters, escaped partitions included). Stereo
+assignments (left/side, right/side, mid/side) are decorrelated before the
+PCM leaves the crate; LPC subframes surface as `Error::Unsupported`.
+`docs/algorithms/flac.md` pins the exact layout, constants, and the few
+deliberate deviations (local CRC-8/16, unverified MD5, limits).
 
-**Status: skeleton.** The crate compiles, passes the workspace gates and has
-no dependencies. Its API is specified in `docs/algorithms/` and implemented in
-the phase that owns crate #11.
+```rust
+let pcm = modhash_flac::decode(&bytes, &modhash_flac::Limits::default())?;
+let info = modhash_flac::decode_streaminfo(&bytes)?;
+```
+
+Output mirrors `modhash-wav`'s shape: `channels`, `sample_rate`,
+`bits_per_sample`, interleaved sign-extended `i32` `samples`, plus
+`total_samples` provenance from STREAMINFO (0 = unknown).
 
 ## Workspace rules
 
