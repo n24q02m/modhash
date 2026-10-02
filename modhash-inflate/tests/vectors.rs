@@ -198,7 +198,7 @@ pub const BAD_VECTORS: &[BadVector] = &[
     BadVector {
         name: "reserved_block_type",
         why: "BTYPE 3 is reserved and must be refused",
-        input: "0500",
+        input: "0700",
         kind: "BadValue",
     },
     BadVector {
@@ -216,7 +216,7 @@ pub const BAD_VECTORS: &[BadVector] = &[
     BadVector {
         name: "zlib_bad_header_checkbits",
         why: "CMF/FLG fails the modulo-31 check, so this is not a zlib stream",
-        input: "7801",
+        input: "7802",
         kind: "InvalidMagic",
     },
     BadVector {
@@ -228,7 +228,7 @@ pub const BAD_VECTORS: &[BadVector] = &[
     BadVector {
         name: "zlib_preset_dictionary",
         why: "FDICT set: preset dictionaries are refused",
-        input: "78bc2b284a2d4e2d5148c94c2e29186e4c00840156cd",
+        input: "78bb2b284a2d4e2d5148c94c2e29186e4c00840156cd",
         kind: "Unsupported",
     },
     BadVector {
@@ -239,8 +239,8 @@ pub const BAD_VECTORS: &[BadVector] = &[
     },
     BadVector {
         name: "distance_before_start",
-        why: "a match reaching before the start of the output",
-        input: "600005b000",
+        why: "a back-reference at distance 2 when only one byte has been produced",
+        input: "730442",
         kind: "BadValue",
     },
 ];

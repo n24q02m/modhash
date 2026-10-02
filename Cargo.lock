@@ -85,6 +85,9 @@ dependencies = [
 [[package]]
 name = "modhash-inflate"
 version = "0.1.0"
+dependencies = [
+ "modhash-primitives",
+]
 
 [[package]]
 name = "modhash-jpeg"
@@ -96,6 +99,9 @@ dependencies = [
 [[package]]
 name = "modhash-math"
 version = "0.1.0"
+dependencies = [
+ "modhash-primitives",
+]
 
 [[package]]
 name = "modhash-mp3"
@@ -134,11 +140,15 @@ version = "0.1.0"
 [[package]]
 name = "modhash-raster"
 version = "0.1.0"
+dependencies = [
+ "modhash-primitives",
+]
 
 [[package]]
 name = "modhash-text"
 version = "0.1.0"
 dependencies = [
+ "modhash-primitives",
  "modhash-unicode",
 ]
 
@@ -153,6 +163,9 @@ dependencies = [
 [[package]]
 name = "modhash-unicode"
 version = "0.1.0"
+dependencies = [
+ "modhash-primitives",
+]
 
 [[package]]
 name = "modhash-video"

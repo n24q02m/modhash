@@ -7,6 +7,15 @@ gate checks edges, not graph shape.
 
 The order table below is the table from the design spec, transcribed once. A
 crate missing from it is a gate failure, not a silently accepted crate.
+The gate also checks COMPLETENESS. The ordering rule alone cannot catch a
+missing edge: an empty dependency list trivially satisfies "every edge points
+down", so a crate that was supposed to build on modhash-primitives shipped
+with no dependency at all and the gate stayed green. EXPECTED_EDGES below is
+the declared design graph, and the actual graph must match it exactly.
+
+Amending EXPECTED_EDGES is allowed but must be deliberate: an implementer who
+does not need a declared edge removes it in the same change and says why in
+the pull request, so the table stays the design record rather than a wish.
 
 Exit codes: 0 = clean, 1 = rule violated or table drift, other = cargo failed.
 """
@@ -42,6 +51,42 @@ ORDER = {
     "modhash-cli": 22,
 }
 
+# The declared design graph, from the spec §3 table plus the shared-vocabulary
+# edges it implies: modhash-primitives exists to be used by the whole kit, and
+# modhash-cli is the command front end for the kit crate.
+EXPECTED_EDGES = {
+    "modhash-primitives": [],
+    "modhash-inflate": ["modhash-primitives"],
+    "modhash-unicode": ["modhash-primitives"],
+    "modhash-math": ["modhash-primitives"],
+    "modhash-raster": ["modhash-primitives"],
+    "modhash-png": ["modhash-raster"],
+    "modhash-bmp": ["modhash-raster"],
+    "modhash-jpeg": ["modhash-raster"],
+    "modhash-text": ["modhash-primitives", "modhash-unicode"],
+    "modhash-fastcdc": ["modhash-primitives"],
+    "modhash-wav": ["modhash-primitives"],
+    "modhash-flac": ["modhash-primitives"],
+    "modhash-mp3": ["modhash-primitives"],
+    "modhash-audio": ["modhash-math", "modhash-wav", "modhash-flac"],
+    "modhash-mp4": ["modhash-primitives"],
+    "modhash-h264": ["modhash-primitives", "modhash-math", "modhash-raster"],
+    "modhash-video": ["modhash-primitives", "modhash-raster", "modhash-text", "modhash-mp4", "modhash-h264"],
+    "modhash-zip": ["modhash-inflate"],
+    "modhash-pdf": ["modhash-primitives", "modhash-inflate", "modhash-text"],
+    "modhash-tier3": ["modhash-math", "modhash-raster"],
+    "modhash-index": ["modhash-primitives"],
+    "modhash": [
+        "modhash-audio", "modhash-bmp", "modhash-fastcdc", "modhash-flac",
+        "modhash-h264", "modhash-index", "modhash-inflate", "modhash-jpeg",
+        "modhash-math", "modhash-mp3", "modhash-mp4", "modhash-pdf",
+        "modhash-png", "modhash-primitives", "modhash-raster",
+        "modhash-text", "modhash-tier3", "modhash-unicode", "modhash-video",
+        "modhash-wav", "modhash-zip",
+    ],
+    "modhash-cli": ["modhash"],
+}
+
 
 def load_metadata():
     out = subprocess.run(
@@ -68,15 +113,27 @@ def main():
         name = pkg["name"]
         if name not in ORDER:
             continue
-        for dep in pkg["dependencies"]:
-            if dep["name"] not in ORDER:
-                failures.append(f"{name} ({ORDER[name]}) depends on non-workspace crate {dep['name']}")
-                continue
-            if dep["name"] == name:
+        actual = {d["name"] for d in pkg["dependencies"]}
+        declared = set(EXPECTED_EDGES.get(name, []))
+
+        for missing in sorted(declared - actual):
+            failures.append(
+                f"{name} (#{ORDER[name]}) is missing a declared dependency on {missing}; "
+                f"the crate table says it builds on it"
+            )
+        for extra in sorted(actual - declared):
+            failures.append(
+                f"{name} (#{ORDER[name]}) declares {extra}, which the crate table does not list"
+            )
+
+        for dep in sorted(actual):
+            if dep not in ORDER:
+                failures.append(f"{name} ({ORDER[name]}) depends on non-workspace crate {dep}")
+            elif dep == name:
                 failures.append(f"{name} ({ORDER[name]}) depends on itself")
-            elif ORDER[dep["name"]] >= ORDER[name]:
+            elif ORDER[dep] >= ORDER[name]:
                 failures.append(
-                    f"{name} (#{ORDER[name]}) depends on {dep['name']} (#{ORDER[dep['name']]}); "
+                    f"{name} (#{ORDER[name]}) depends on {dep} (#{ORDER[dep]}); "
                     f"a crate may only depend on a LOWER-numbered crate"
                 )
 
@@ -86,7 +143,11 @@ def main():
             print(f"  - {f}")
         return 1
 
-    print(f"DAG gate OK: {len(members)} crates, all edges point to a lower order number")
+    print(
+        f"DAG gate OK: {len(members)} crates, "
+        f"{sum(len(v) for v in EXPECTED_EDGES.values())} declared edges all present "
+        f"and all pointing to a lower order number"
+    )
     return 0
 
 

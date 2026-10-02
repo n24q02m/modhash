@@ -10,7 +10,7 @@ readme = "README.md"
 categories = ["algorithms", "cryptography"]
 
 [dependencies]
-
+modhash-primitives = { path = "../modhash-primitives" }
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "deny"
