@@ -1,0 +1,19 @@
+[package]
+name = "modhash-audio"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Audio fingerprint facade: spectral peaks and the peak-to-id reverse map."
+readme = "README.md"
+categories = ["algorithms", "cryptography"]
+
+[dependencies]
+modhash-math = { path = "../modhash-math", version = "0.1.0" }
+modhash-wav = { path = "../modhash-wav", version = "0.1.0" }
+modhash-flac = { path = "../modhash-flac", version = "0.1.0" }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"

@@ -1,0 +1,16 @@
+[package]
+name = "modhash-raster"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Raw image buffers, box-average resampling, BT.601 luma and EXIF orientation."
+readme = "README.md"
+categories = ["algorithms", "cryptography"]
+
+[dependencies]
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"

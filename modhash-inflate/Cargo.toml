@@ -1,0 +1,16 @@
+[package]
+name = "modhash-inflate"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "DEFLATE and zlib stream decoding (RFC 1951)."
+readme = "README.md"
+categories = ["algorithms", "cryptography"]
+
+[dependencies]
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"

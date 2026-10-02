@@ -1,0 +1,39 @@
+[workspace]
+resolver = "3"
+members = [
+    "modhash-primitives",
+    "modhash-inflate",
+    "modhash-unicode",
+    "modhash-math",
+    "modhash-raster",
+    "modhash-png",
+    "modhash-bmp",
+    "modhash-jpeg",
+    "modhash-text",
+    "modhash-fastcdc",
+    "modhash-wav",
+    "modhash-flac",
+    "modhash-mp3",
+    "modhash-audio",
+    "modhash-mp4",
+    "modhash-h264",
+    "modhash-video",
+    "modhash-zip",
+    "modhash-pdf",
+    "modhash-tier3",
+    "modhash-index",
+    "modhash",
+    "modhash-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+repository = "https://github.com/n24q02m/modhash"
+homepage = "https://github.com/n24q02m/modhash"
+
+[profile.release]
+lto = true
+codegen-units = 1

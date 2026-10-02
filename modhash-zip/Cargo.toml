@@ -1,0 +1,17 @@
+[package]
+name = "modhash-zip"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "ZIP container reading: stored and deflated entries, plus a minimal XML reader."
+readme = "README.md"
+categories = ["algorithms", "cryptography"]
+
+[dependencies]
+modhash-inflate = { path = "../modhash-inflate", version = "0.1.0" }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"

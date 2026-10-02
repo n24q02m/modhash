@@ -1,0 +1,17 @@
+[package]
+name = "modhash-wav"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "RIFF/WAVE decoding for 8/16/24/32-bit PCM and float samples."
+readme = "README.md"
+categories = ["algorithms", "cryptography"]
+
+[dependencies]
+modhash-primitives = { path = "../modhash-primitives", version = "0.1.0" }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"

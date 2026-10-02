@@ -1,0 +1,17 @@
+[package]
+name = "modhash-mp3"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "MP3 decoding for layers I/II/III including the bit reservoir."
+readme = "README.md"
+categories = ["algorithms", "cryptography"]
+
+[dependencies]
+modhash-primitives = { path = "../modhash-primitives", version = "0.1.0" }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"

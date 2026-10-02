@@ -1,0 +1,17 @@
+[package]
+name = "modhash-jpeg"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "JPEG decoding for baseline (SOF0) and progressive (SOF2) profiles."
+readme = "README.md"
+categories = ["algorithms", "cryptography"]
+
+[dependencies]
+modhash-raster = { path = "../modhash-raster", version = "0.1.0" }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"

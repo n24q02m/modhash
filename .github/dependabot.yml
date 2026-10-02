@@ -1,0 +1,22 @@
+version: 2
+
+updates:
+  # This workspace resolves zero registry packages by design, so there is
+  # nothing for the cargo ecosystem updater to bump. The entry is kept with a
+  # disabled schedule so that adding a dependency is a deliberate, visible
+  # change: it must be justified in the same commit that un-breaks
+  # scripts/gate_zero_dep.sh.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: never
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        patterns: ["*"]

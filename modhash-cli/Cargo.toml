@@ -1,0 +1,21 @@
+[package]
+name = "modhash-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "The `modhash` command line interface."
+readme = "README.md"
+categories = ["algorithms", "cryptography"]
+
+[dependencies]
+modhash = { path = "../modhash", version = "0.1.0" }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"
+
+[[bin]]
+name = "modhash"
+path = "src/main.rs"

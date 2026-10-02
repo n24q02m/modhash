@@ -1,0 +1,19 @@
+[package]
+name = "modhash-pdf"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "PDF text extraction across classic xref, xref streams, cmap and CID fonts."
+readme = "README.md"
+categories = ["algorithms", "cryptography"]
+
+[dependencies]
+modhash-primitives = { path = "../modhash-primitives", version = "0.1.0" }
+modhash-inflate = { path = "../modhash-inflate", version = "0.1.0" }
+modhash-text = { path = "../modhash-text", version = "0.1.0" }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"

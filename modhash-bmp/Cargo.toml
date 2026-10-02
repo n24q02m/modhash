@@ -1,0 +1,17 @@
+[package]
+name = "modhash-bmp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "BMP decoding for 24/32-bit images and RLE8 compression."
+readme = "README.md"
+categories = ["algorithms", "cryptography"]
+
+[dependencies]
+modhash-raster = { path = "../modhash-raster", version = "0.1.0" }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"

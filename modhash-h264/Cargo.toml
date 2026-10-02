@@ -1,0 +1,19 @@
+[package]
+name = "modhash-h264"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "H.264 decoding: NAL, SPS, slices, CAVLC/CABAC, transforms and deblocking."
+readme = "README.md"
+categories = ["algorithms", "cryptography"]
+
+[dependencies]
+modhash-primitives = { path = "../modhash-primitives", version = "0.1.0" }
+modhash-math = { path = "../modhash-math", version = "0.1.0" }
+modhash-raster = { path = "../modhash-raster", version = "0.1.0" }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"

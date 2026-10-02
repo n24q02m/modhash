@@ -1,0 +1,21 @@
+[package]
+name = "modhash-video"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Video fingerprint facade: frames to perceptual hashes to sequence matching."
+readme = "README.md"
+categories = ["algorithms", "cryptography"]
+
+[dependencies]
+modhash-primitives = { path = "../modhash-primitives", version = "0.1.0" }
+modhash-raster = { path = "../modhash-raster", version = "0.1.0" }
+modhash-text = { path = "../modhash-text", version = "0.1.0" }
+modhash-mp4 = { path = "../modhash-mp4", version = "0.1.0" }
+modhash-h264 = { path = "../modhash-h264", version = "0.1.0" }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"

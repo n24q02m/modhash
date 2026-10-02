@@ -1,0 +1,68 @@
+name: Bug report
+description: Something decodes wrong, panics, or produces a different hash than it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This project parses untrusted input. A panic on a malformed file is a
+        bug; see SECURITY.md for how to report it privately if it is not yet
+        publicly triggerable.
+
+  - type: input
+    id: crate
+    attributes:
+      label: Crate
+      description: Which crate reproduces this?
+      placeholder: modhash-png
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Crate version, or `main` if you built from the repository.
+      placeholder: 0.1.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: The observed behaviour, including the exact error or panic.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: The specified behaviour, with a citation if the format specification states it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: |
+        Smallest input that reproduces it. Code, a hex dump, or a base64 blob
+        is fine.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: fuzz-command
+    attributes:
+      label: Fuzz command (if applicable)
+      description: The exact `fuzz <target> <iters> <seed>` command line that reproduces it.
+      render: shell
+
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: x86_64-unknown-linux-gnu, rustc 1.85.0

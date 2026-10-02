@@ -1,0 +1,17 @@
+[package]
+name = "modhash-text"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Text fingerprints: lowercase, 3-shingles and 128-bit MinHash over NFC text."
+readme = "README.md"
+categories = ["algorithms", "cryptography"]
+
+[dependencies]
+modhash-unicode = { path = "../modhash-unicode", version = "0.1.0" }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"

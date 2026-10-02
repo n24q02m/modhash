@@ -1,0 +1,16 @@
+[package]
+name = "modhash-math"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "FFT, DCT-II, median, 3x3 solve and small linear algebra."
+readme = "README.md"
+categories = ["algorithms", "cryptography"]
+
+[dependencies]
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"

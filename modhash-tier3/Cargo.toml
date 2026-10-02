@@ -1,0 +1,18 @@
+[package]
+name = "modhash-tier3"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Tier-3 local features: ORB, FAST-9, rBRIEF, RANSAC, D4 and DTW."
+readme = "README.md"
+categories = ["algorithms", "cryptography"]
+
+[dependencies]
+modhash-math = { path = "../modhash-math", version = "0.1.0" }
+modhash-raster = { path = "../modhash-raster", version = "0.1.0" }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"

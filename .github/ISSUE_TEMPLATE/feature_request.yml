@@ -1,0 +1,52 @@
+name: Feature request
+description: A codec, a modality, or a capability the kit does not cover yet.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening an issue, check the crate table in the README: adding
+        a capability means adding a crate at a specific position in the
+        dependency order, so it is a design decision, not a patch.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: |
+        What are you trying to hash or match that the kit cannot do today?
+        Describe the input, not the API you would like.
+    validations:
+      required: true
+
+  - type: textarea
+    id: conformance
+    attributes:
+      label: Where would correctness come from?
+      description: |
+        A published test vector set, a specification section, or an existing
+        reference implementation whose output you can compare against. A codec
+        with no way to verify it will not be accepted.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: modality
+    attributes:
+      label: Modality
+      options:
+        - text / documents
+        - raster image
+        - audio
+        - video
+        - generic binary file
+        - not media at all (hashing or indexing primitive)
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Including the option of not adding this.

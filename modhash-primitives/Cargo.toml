@@ -1,0 +1,16 @@
+[package]
+name = "modhash-primitives"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Hash primitives, checksums and byte readers used across the kit."
+readme = "README.md"
+categories = ["algorithms", "cryptography"]
+
+[dependencies]
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"

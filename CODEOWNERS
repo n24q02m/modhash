@@ -1,0 +1,18 @@
+* @n24q02m
+
+# Policy gates and release scripts need a second pair of eyes: a change here
+# can weaken a guarantee that every other crate depends on.
+/scripts/ @n24q02m
+/.github/workflows/ @n24q02m
+/CONTRIBUTING.md @n24q02m
+/SECURITY.md @n24q02m
+
+# Codec crates: the decoding surface, where untrusted input arrives.
+/modhash-png/ @n24q02m
+/modhash-bmp/ @n24q02m
+/modhash-jpeg/ @n24q02m
+/modhash-mp3/ @n24q02m
+/modhash-mp4/ @n24q02m
+/modhash-h264/ @n24q02m
+/modhash-zip/ @n24q02m
+/modhash-pdf/ @n24q02m
