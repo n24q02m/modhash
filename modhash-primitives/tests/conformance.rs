@@ -181,4 +181,9 @@ fn bitreader_zero_width_read_is_zero_at_any_position() {
     let mut r = BitReader::new(&[0xA6, 0x50]);
     r.bits(0).unwrap();
     assert_eq!(r.bits(12).unwrap(), 0xA65);
+    // Exhausted stream: zero-width reads stay legal no-ops.
+    let mut r = BitReader::new(&[0xFF]);
+    assert_eq!(r.bits(8).unwrap(), 0xFF);
+    assert_eq!(r.remaining_bits(), 0);
+    assert_eq!(r.bits(0).unwrap(), 0);
 }
