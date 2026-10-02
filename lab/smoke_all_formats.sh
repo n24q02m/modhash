@@ -102,9 +102,7 @@ ok_row jpeg         base_444.jpg                     image     jpeg
 ok_row wav          tone.wav                         audio     wav
 ok_row flac         tone.flac                        audio     flac
 ok_row mp3          l3_short.mp3                     audio     mp3
-# mp4/h264: the demux crate landed but the video modality lane
-# (modhash-video on modhash-h264) has not — honest pending, not a pass.
-pending_row mp4     minimal.mp4                     video
+ok_row mp4          a_64x48.mp4                      video     mp4
 ok_row zip          minimal.zip                      binary    zip
 ok_row pdf          text_page.pdf                    text      pdf
 

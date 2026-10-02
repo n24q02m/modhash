@@ -114,3 +114,7 @@ smoke: PASS — every §4.5 format with a landed lane ran end-to-end
 ```
 
 Exit code 0 at commit `fd174a8`.
+
+## smoke_all_formats with video row (2026-10-03, main 60ba679 + smoke row update)
+- `bash lab/smoke_all_formats.sh` (msys2 bash, release binary rebuilt at run): 11/11 ok rows — png/bmp/jpeg/wav/flac/mp3/**mp4(a_64x48.mp4 → video/mp4, tier1 72a4bbfd76647b2d…)**/zip/pdf/text/binary + cross-format sanity (jpeg/png tier1 equality, match self=0/distinct=1, dedup, bench). Full output captured in this receipt; script exits 0.
+- mp4 fixture: byte copy of modhash/tests/fixtures/a_64x48.mp4; provenance chain in lab/smoke-fixtures/PROVENANCE.md.

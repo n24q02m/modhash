@@ -22,3 +22,8 @@ exercises end-to-end), not evaluation corpora — corpus rules live in
 committed byte sequence, so a changed upstream fixture changes the smoke
 surface exactly as it should.
 | `minimal.mp4` | `fuzz/corpus/mp4/` (mp4 lane fuzz seed, minimal ISO-BMFF) |
+
+## a_64x48.mp4 (added 2026-10-03)
+- Source: copied byte-identical from modhash/tests/fixtures/a_64x48.mp4
+- Provenance: see modhash/tests/fixtures/PROVENANCE.md (ffmpeg 9.0.1 + libx264, generated locally)
+- sha256: see source entry above
