@@ -53,8 +53,8 @@ use modhash_h264::{Decoder, Frame, Limits as H264Limits};
 use modhash_mp4::{EntryKind, Sample, demux};
 use modhash_primitives::{Digest, Error, Result, sha256};
 
-pub use phash::frame_phash;
 pub use minhash::SHINGLE_FRAMES;
+pub use phash::frame_phash;
 
 /// Frames sampled per second of video — the `2` of
 /// `frame_index = pts · 2` in spec §4.2.
@@ -199,11 +199,7 @@ fn track_avcc(track: &modhash_mp4::Track) -> Result<avcc::AvcConfig> {
 /// length prefix becomes a `00 00 00 01` start code. `out` is reused
 /// across samples so peak allocation is the largest sample, not the
 /// file. Returns `false` for a zero-length sample (skipped, not pushed).
-fn sample_to_annexb(
-    payload: &[u8],
-    length_size: usize,
-    out: &mut Vec<u8>,
-) -> Result<bool> {
+fn sample_to_annexb(payload: &[u8], length_size: usize, out: &mut Vec<u8>) -> Result<bool> {
     out.clear();
     if payload.is_empty() {
         return Ok(false);
@@ -217,15 +213,19 @@ fn sample_to_annexb(
                     .ok_or(Error::truncated("avc NAL length", 1, 0))?,
             ),
             2 => {
-                let b = payload
-                    .get(pos..pos + 2)
-                    .ok_or(Error::truncated("avc NAL length", 2, payload.len() - pos))?;
+                let b = payload.get(pos..pos + 2).ok_or(Error::truncated(
+                    "avc NAL length",
+                    2,
+                    payload.len() - pos,
+                ))?;
                 usize::from(u16::from_be_bytes([b[0], b[1]]))
             }
             4 => {
-                let b = payload
-                    .get(pos..pos + 4)
-                    .ok_or(Error::truncated("avc NAL length", 4, payload.len() - pos))?;
+                let b = payload.get(pos..pos + 4).ok_or(Error::truncated(
+                    "avc NAL length",
+                    4,
+                    payload.len() - pos,
+                ))?;
                 u32::from_be_bytes([b[0], b[1], b[2], b[3]]) as usize
             }
             // parse_avcc has already excluded 3; any other width is a
@@ -236,9 +236,11 @@ fn sample_to_annexb(
         let end = pos
             .checked_add(n)
             .ok_or(Error::BadValue("avc NAL length overflow"))?;
-        let nal = payload
-            .get(pos..end)
-            .ok_or(Error::truncated("avc NAL payload", n, payload.len() - pos))?;
+        let nal = payload.get(pos..end).ok_or(Error::truncated(
+            "avc NAL payload",
+            n,
+            payload.len() - pos,
+        ))?;
         out.extend_from_slice(&[0, 0, 0, 1]);
         out.extend_from_slice(nal);
         pos = end;
@@ -336,12 +338,15 @@ pub fn decode(input: &[u8], limits: &Limits) -> Result<VideoFingerprint> {
         dec.push_stream(&lead)?;
     }
 
-
     let mut rows: Vec<Row> = Vec::new();
     let mut annexb: Vec<u8> = Vec::new();
     let mut dims: Option<(u32, u32)> = None;
     for (i, s) in samples.iter().enumerate().skip(start) {
-        if !sample_to_annexb(track.sample_bytes(input, i)?, cfg.nal_length_size, &mut annexb)? {
+        if !sample_to_annexb(
+            track.sample_bytes(input, i)?,
+            cfg.nal_length_size,
+            &mut annexb,
+        )? {
             continue;
         }
         for f in dec.push_stream(&annexb)? {

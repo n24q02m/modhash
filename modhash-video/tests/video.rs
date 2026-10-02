@@ -8,8 +8,7 @@
 
 use modhash_primitives::{Error, SplitMix64};
 use modhash_video::{
-    FRAME_HAMMING_MAX, Limits, MATCH_SCORE_MIN, VideoFingerprint, decode, match_score,
-    video_match,
+    FRAME_HAMMING_MAX, Limits, MATCH_SCORE_MIN, VideoFingerprint, decode, match_score, video_match,
 };
 
 fn fixture(name: &str) -> Vec<u8> {
@@ -199,38 +198,26 @@ fn limits_are_enforced() {
         max_input: bytes.len() - 1,
         ..Limits::default()
     };
-    assert!(matches!(
-        decode(&bytes, &lim),
-        Err(Error::TooLarge { .. })
-    ));
+    assert!(matches!(decode(&bytes, &lim), Err(Error::TooLarge { .. })));
 
     let lim = Limits {
         max_duration_s: v.duration - 0.5,
         ..Limits::default()
     };
-    assert!(matches!(
-        decode(&bytes, &lim),
-        Err(Error::TooLarge { .. })
-    ));
+    assert!(matches!(decode(&bytes, &lim), Err(Error::TooLarge { .. })));
 
     let lim = Limits {
         max_frames: v.frame_hashes.len() - 1,
         ..Limits::default()
     };
-    assert!(matches!(
-        decode(&bytes, &lim),
-        Err(Error::TooLarge { .. })
-    ));
+    assert!(matches!(decode(&bytes, &lim), Err(Error::TooLarge { .. })));
 
     // Fewer decodable frames than the stream contains → TooLarge.
     let lim = Limits {
         max_decoded_frames: 2,
         ..Limits::default()
     };
-    assert!(matches!(
-        decode(&bytes, &lim),
-        Err(Error::TooLarge { .. })
-    ));
+    assert!(matches!(decode(&bytes, &lim), Err(Error::TooLarge { .. })));
 }
 
 /// 20 000 deterministic corruptions of a valid mp4 — bit flips, drops,

@@ -587,9 +587,7 @@ fn cmd_bench(args: &[String]) -> u8 {
                 Ok(Signature::Audio(s)) => sink ^= s.peaks().len() as u64,
                 Ok(Signature::Text(t)) => sink ^= t.first().copied().unwrap_or(0),
                 Ok(Signature::Binary(b)) => sink ^= b.len() as u64,
-                Ok(Signature::Video(v)) => {
-                    sink ^= v.frame_hashes.first().copied().unwrap_or(0)
-                }
+                Ok(Signature::Video(v)) => sink ^= v.frame_hashes.first().copied().unwrap_or(0),
                 Err(_) => unreachable!("warm-up proved the fixture signs"),
             }
         }

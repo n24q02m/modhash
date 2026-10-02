@@ -72,9 +72,7 @@ pub fn distance(a: &Signature, b: &Signature) -> Result<u32, modhash::Error> {
         MatchOutcome::Text { jaccard, .. } | MatchOutcome::Binary { jaccard, .. } => {
             Ok(((1.0 - jaccard) * 1_000_000.0).round() as u32)
         }
-        MatchOutcome::Video { score, .. } => {
-            Ok(((1.0 - score) * 1_000_000.0).round() as u32)
-        }
+        MatchOutcome::Video { score, .. } => Ok(((1.0 - score) * 1_000_000.0).round() as u32),
     }
 }
 
@@ -243,9 +241,7 @@ pub fn render_description(desc: &Description) -> String {
         modhash::Facts::Audio { .. } => Some("tier3: dtw (no stored features; comparator only)"),
         modhash::Facts::Text { .. } => Some("tier3: none (docx lane shares text tier-2)"),
         modhash::Facts::Binary { .. } => Some("tier3: none (no local features for binary)"),
-        modhash::Facts::Video { .. } => {
-            Some("tier3: none (frame hashes are the local features)")
-        }
+        modhash::Facts::Video { .. } => Some("tier3: none (frame hashes are the local features)"),
     };
     let mut out = desc.to_string();
     if let Some(line) = tier3 {

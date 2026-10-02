@@ -417,10 +417,7 @@ fn mp4_decodes_through_video_lane() {
     // identical tier-1, match score 1.0 through the facade.
     let mov = signature(&fixture("a_64x48.mov")).unwrap();
     let outcome = match_(&desc.signature, &mov).unwrap();
-    let MatchOutcome::Video {
-        score, matched, ..
-    } = outcome
-    else {
+    let MatchOutcome::Video { score, matched, .. } = outcome else {
         panic!("video match must be MatchOutcome::Video")
     };
     assert_eq!(score, 1.0);

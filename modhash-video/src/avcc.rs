@@ -26,9 +26,9 @@ fn take<'a>(data: &'a [u8], pos: &mut usize, n: usize, what: &'static str) -> Re
     let end = pos
         .checked_add(n)
         .ok_or(Error::BadValue("avcC offset overflow"))?;
-    let out = data
-        .get(*pos..end)
-        .ok_or(Error::truncated(what, n, data.len().saturating_sub(*pos)))?;
+    let out =
+        data.get(*pos..end)
+            .ok_or(Error::truncated(what, n, data.len().saturating_sub(*pos)))?;
     *pos = end;
     Ok(out)
 }
@@ -60,9 +60,7 @@ pub fn parse_avcc(data: &[u8]) -> Result<AvcConfig> {
     take(data, &mut pos, 3, "avcC profile/level")?;
     let length_size = usize::from(u8_at(data, &mut pos, "avcC lengthSizeMinusOne")? & 0x03) + 1;
     if length_size == 3 {
-        return Err(Error::Unsupported(
-            "video avcC 3-byte NAL length prefix",
-        ));
+        return Err(Error::Unsupported("video avcC 3-byte NAL length prefix"));
     }
     let sps_count = usize::from(u8_at(data, &mut pos, "avcC SPS count")? & 0x1F);
     let mut sps = Vec::with_capacity(sps_count);
@@ -137,9 +135,6 @@ mod tests {
         v[0] = 9;
         assert!(matches!(parse_avcc(&v), Err(Error::BadValue(_))));
         let v = rec(2, &[&[0x67]], &[&[0x68]]);
-        assert!(matches!(
-            parse_avcc(&v),
-            Err(Error::Unsupported(_))
-        ));
+        assert!(matches!(parse_avcc(&v), Err(Error::Unsupported(_))));
     }
 }

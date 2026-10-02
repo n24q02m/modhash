@@ -199,9 +199,7 @@ fn pending_err(format: Format, modality: Modality) -> Error {
         // These slots are all implemented; each arm is dead code kept
         // so a stale `pending` flag fails descriptively, not blankly.
         (Format::Mp3, _) => "modhash-mp3 pending flag left stale (bug)",
-        (Format::Mp4, _) | (_, Modality::Video) => {
-            "modhash-video pending flag left stale (bug)"
-        }
+        (Format::Mp4, _) | (_, Modality::Video) => "modhash-video pending flag left stale (bug)",
         (Format::Pdf, _) => "modhash-pdf pending flag left stale (bug)",
         _ => "modality lane has not landed",
     };
@@ -434,9 +432,11 @@ pub fn content_hash(bytes: &[u8]) -> Result<Digest<32>> {
         // Tier-1 for video is the decoded-frame digest chain the video
         // crate computes while fingerprinting — same decode, one pass.
         Modality::Video => {
-            return Ok(modhash_video::decode(bytes, &modhash_video::Limits::default())
-                .map_err(|e| decode_err(det.modality, e))?
-                .content_digest);
+            return Ok(
+                modhash_video::decode(bytes, &modhash_video::Limits::default())
+                    .map_err(|e| decode_err(det.modality, e))?
+                    .content_digest,
+            );
         }
     };
     modhash_primitives::sha256(&payload).map_err(|e| decode_err(det.modality, e))
