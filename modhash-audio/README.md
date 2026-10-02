@@ -2,9 +2,18 @@
 
 Audio fingerprint facade: spectral peaks and the peak-to-id reverse map.
 
-**Status: skeleton.** The crate compiles, passes the workspace gates and has
-no dependencies. Its API is specified in `docs/algorithms/` and implemented in
-the phase that owns crate #13.
+`signature` extracts Shazam-style landmarks — `(t, f)` pairs where `t`
+is a 2048-sample frame index and `f` a max-pooled frequency slot — from
+interleaved `i32` PCM at 44 100 Hz (the exact output shape of
+`modhash-wav` and `modhash-flac`; `signature_of_wav` /
+`signature_of_flac` wrap those decoders and refuse other rates).
+`build_index` inverts the corpus into `f → (t, id)`;
+`match_signature` votes on a `Δt` histogram and returns the modal
+offset per id within ±1 frame (≈46 ms). `Signature::fingerprint`
+produces the §4.2 64-bit first-peak presence mask.
+
+The full algorithm — constants, quantization, tie-breaking, hostile
+input — lives in `docs/algorithms/audio-peaks.md`.
 
 ## Workspace rules
 
