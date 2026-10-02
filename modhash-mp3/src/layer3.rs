@@ -547,12 +547,13 @@ fn huffman(
     };
 
     // Region boundaries in LINES. Non-switched granules transmit
-    // region0/region1 as band counts; for switched blocks MPEG-1 fixes
-    // the split at line 54 / line 576 (mpg123's `region1start = 54>>1`,
-    // `region2start = 576>>1` — table_select[2] is never used because
-    // big_values <= 288 pairs keeps decode inside regions 0/1).
+    // region0/region1 as band counts; for MPEG-1 switched blocks the
+    // split is fixed at line 36 / line 576 (mpg123: `!lsf` branch sets
+    // `region1start = 36>>1`, `region2start = 576>>1` — the 54>>1 branch
+    // is MPEG-2 only). table_select[2] is never used because
+    // big_values <= 288 pairs keeps decode inside regions 0/1.
     let (r0_lines, r1_lines) = if g.window_switching {
-        (54usize, 576usize)
+        (36usize, 576usize)
     } else {
         (
             line_of_entry(min(usize::from(g.region0) + 1, tab.n)),

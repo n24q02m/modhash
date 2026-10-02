@@ -56,11 +56,15 @@ fn l2_table_index(h: &Header) -> usize {
     }
 }
 
-/// Midpoint dequantizer shared by both layers: a `bits`-bit unsigned code
-/// becomes a sample in `[-1, 1)` symmetric about 0.
+/// Non-grouped dequantizer shared by both layers — ISO/IEC 11172-3
+/// §2.4.3.2 `s" = (2^nb/(2^nb-1))·(s'" + 2^(-nb+1))` with `s'"` the
+/// offset-binary code shifted to two's-complement; in raw-code terms
+/// `s" = (2q - 2^nb + 2)/(2^nb - 1)` (libmad I_sample, ffmpeg
+/// l1_unscale and mpg123's `(-1<<n) + sample + 1` all agree; the
+/// asymmetric +2 is spec-exact, not the midpoint's +1).
 fn unquant(code: u32, bits: u32) -> f32 {
     let levels = (1u32 << bits) as f32;
-    (2.0 * code as f32 + 1.0 - levels) / (levels - 1.0)
+    (2.0 * code as f32 + 2.0 - levels) / (levels - 1.0)
 }
 
 /// Layer II grouped quantizer midpoint formula (Table 3-B.4 `C/D`).

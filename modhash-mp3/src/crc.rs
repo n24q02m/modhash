@@ -61,3 +61,51 @@ impl Crc16 {
         self.0
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Crc16;
+
+    /// ISO/IEC 11172-3 frame CRC: poly 0x8005, init 0xFFFF, MSB-first.
+    /// `"123456789"` → 0xAEE7 — the oft-quoted catalog value 0xFEE8 is
+    /// CRC-16/BUYPASS, which shares the polynomial but inits to 0x0000;
+    /// this pin is the MPEG-initialised variant.
+    #[test]
+    fn known_answer_123456789() {
+        let mut c = Crc16::new();
+        c.bytes(b"123456789");
+        assert_eq!(c.finish(), 0xAEE7);
+    }
+
+    #[test]
+    fn empty_is_init_state() {
+        assert_eq!(Crc16::new().finish(), 0xFFFF);
+    }
+
+    /// Bit-by-bit feeding must equal the byte path exactly (L2 scfsi
+    /// coverage ends mid-byte).
+    #[test]
+    fn bitwise_matches_bytewise() {
+        let mut a = Crc16::new();
+        a.bytes(&[0xA5, 0x3C]);
+        let mut b = Crc16::new();
+        for byte in [0xA5u8, 0x3C] {
+            for i in (0..8).rev() {
+                b.bit((byte >> i) & 1 != 0);
+            }
+        }
+        assert_eq!(a.finish(), b.finish());
+    }
+
+    /// A mid-byte field feed covers exactly the field's stream bits.
+    #[test]
+    fn field_feeds_msb_first() {
+        let mut a = Crc16::new();
+        a.field(0b1011, 4);
+        let mut b = Crc16::new();
+        for bit in [true, false, true, true] {
+            b.bit(bit);
+        }
+        assert_eq!(a.finish(), b.finish());
+    }
+}

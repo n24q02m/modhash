@@ -11914,3 +11914,104 @@ pub(crate) const BITRATE_L3: [u32; 16] = [
 ];
 /// Sampling rates (Hz) indexed by the 2-bit header field.
 pub(crate) const SAMPLE_RATES: [u32; 3] = [44100, 48000, 32000];
+
+#[cfg(test)]
+mod tests {
+    //! Window-table pins: the four block-type windows are the normative
+    //! shapes of ISO/IEC 11172-3 §2.4.3.4 rendered by
+    //! `lab/mp3/gen_mp3_tables.py` and cross-checked against minimp3's
+    //! `g_mdct_window`. The pins assert each window's spec shape rather
+    //! than 36 decimal constants: the long window satisfies the MDCT
+    //! power-complement identity `w[i]^2 + w[i+18]^2 == 1`; the start
+    //! window is the long ramp on taps 0..17, held at 1 on 18..23, the
+    //! short window's falling half on 24..29 and zero after; the stop
+    //! window is its mirror image.
+    use super::{W_LONG, W_SHORT, W_START, W_STOP};
+
+    #[test]
+    fn long_window_is_power_complementary() {
+        // The property that makes overlap-add reconstruct a constant
+        // signal exactly.
+        for i in 0..18 {
+            let s = W_LONG[i] * W_LONG[i] + W_LONG[i + 18] * W_LONG[i + 18];
+            assert!(
+                (s - 1.0).abs() < 1e-6,
+                "long window fails the power-complement identity at tap {i}: {s}"
+            );
+        }
+    }
+
+    #[test]
+    fn block_windows_have_spec_shapes() {
+        // Start: same 18-tap rising ramp as the long window …
+        for i in 0..18 {
+            assert!(
+                (W_START[i] - W_LONG[i]).abs() < 1e-7,
+                "start ramp must equal the long ramp at tap {i}"
+            );
+        }
+        // … held at 1 for six taps …
+        for i in 18..24 {
+            assert!(
+                (W_START[i] - 1.0).abs() < 1e-7,
+                "start window must hold 1 at tap {i}"
+            );
+        }
+        // … then the short window's falling half …
+        for i in 0..6 {
+            assert!(
+                (W_START[24 + i] - W_SHORT[6 + i]).abs() < 1e-7,
+                "start tail must equal short's second half at tap {i}"
+            );
+        }
+        // … then silence.
+        for i in 30..36 {
+            assert_eq!(W_START[i], 0.0, "start window ends in zeros");
+        }
+        // Stop is the mirror image.
+        for i in 0..36 {
+            assert!(
+                (W_START[i] - W_STOP[35 - i]).abs() < 1e-7,
+                "start/stop must be mirror images at tap {i}"
+            );
+        }
+        // The normal window is symmetric and rises then falls.
+        for i in 0..18 {
+            assert!(
+                (W_LONG[i] - W_LONG[35 - i]).abs() < 1e-7,
+                "long window must be symmetric at tap {i}"
+            );
+        }
+        assert!(W_LONG[0] < W_LONG[17], "long window rises to its middle");
+        // The short window is a 12-tap symmetric pulse strictly inside
+        // (0,1), used three times per short block.
+        assert_eq!(W_SHORT.len(), 12);
+        for i in 0..6 {
+            assert!(
+                (W_SHORT[i] - W_SHORT[11 - i]).abs() < 1e-7,
+                "short window must be symmetric at tap {i}"
+            );
+        }
+        assert!(
+            W_SHORT.iter().all(|&x| x > 0.0 && x < 1.0),
+            "short window taps stay strictly inside (0,1)"
+        );
+    }
+
+    #[test]
+    fn scalefactor_table_is_monotone_powers() {
+        // Table 3-B.1: SF[i] == 2 · 2^(-i/3) for indices 0..62; index
+        // 63 is the spec's "invalid" sentinel, stored as 0 so an
+        // erroneous stream cannot smuggle in a huge gain.
+        for i in 1..63 {
+            let ratio = super::SF_TABLE[i] / super::SF_TABLE[i - 1];
+            let expected = 2f32.powf(-1.0 / 3.0);
+            assert!(
+                (ratio - expected).abs() < 1e-6,
+                "scalefactor ratio wrong at index {i}: {ratio}"
+            );
+        }
+        assert_eq!(super::SF_TABLE[3], 1.0, "index 3 must be unity");
+        assert_eq!(super::SF_TABLE[63], 0.0, "index 63 is the sentinel");
+    }
+}
