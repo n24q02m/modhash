@@ -50,9 +50,9 @@ impl SplitMix64 {
 
 /// Codec fuzz targets, registered by the phase that owns each codec.
 ///
-/// The skeleton registers none: no codec has an implementation yet. Each
-/// owning phase appends its own name and a matching arm in `dispatch`.
-const TARGET_NAMES: &[&str] = &[];
+/// Each owning phase appends its own name and a matching arm in
+/// `dispatch`, and seeds `fuzz/corpus/<name>/`.
+const TARGET_NAMES: &[&str] = &["mp4"];
 
 fn apply(mode: &str, rng: &mut SplitMix64, input: &[u8]) -> Vec<u8> {
     match mode {
@@ -96,11 +96,55 @@ fn apply(mode: &str, rng: &mut SplitMix64, input: &[u8]) -> Vec<u8> {
 fn dispatch(target: &str, rng: &mut SplitMix64, iters: usize, seed: u64) -> Result<(), String> {
     match target {
         "coremode" => fuzz_coremode(rng, iters, seed),
+        "mp4" => fuzz_codec(rng, iters, seed, "mp4", |bytes| {
+            modhash_mp4::demux(bytes).map(|_| ())
+        }),
         other if TARGET_NAMES.contains(&other) => Err(format!(
             "target {other} is registered but has no corpus wired yet"
         )),
         other => Err(format!("unknown target {other}")),
     }
+}
+
+/// Generic codec fuzz loop: seed corpus from `fuzz/corpus/<target>/` (one
+/// file per case), mutate each seed through the four modes in round-robin,
+/// run the decoder, and report panics with the reproducing iteration and
+/// seed. Decoders signal corrupt input with `Err`, which is not a failure.
+fn fuzz_codec(
+    rng: &mut SplitMix64,
+    iters: usize,
+    seed: u64,
+    target: &str,
+    decode: impl Fn(&[u8]) -> Result<(), modhash_primitives::Error> + std::panic::RefUnwindSafe,
+) -> Result<(), String> {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("fuzz")
+        .join("corpus")
+        .join(target);
+    let mut corpus: Vec<Vec<u8>> = Vec::new();
+    let entries = std::fs::read_dir(&dir)
+        .map_err(|e| format!("corpus dir {} unreadable: {e}", dir.display()))?;
+    for entry in entries {
+        let path = entry.map_err(|e| e.to_string())?.path();
+        if path.is_file() {
+            corpus.push(std::fs::read(&path).map_err(|e| format!("{e}"))?);
+        }
+    }
+    if corpus.is_empty() {
+        return Err(format!("corpus dir {} has no seed files", dir.display()));
+    }
+    for i in 0..iters {
+        let base = &corpus[i % corpus.len()];
+        let input = apply(MODES[i % MODES.len()], rng, base);
+        // Panics inside the decoder are the failure the harness exists to
+        // catch; catch_unwind turns them into a named crash report.
+        let outcome = std::panic::catch_unwind(|| decode(&input));
+        if outcome.is_err() {
+            return Err(format!("{target} panicked at iter {i} (seed {seed})"));
+        }
+    }
+    Ok(())
 }
 
 /// Fuzzes the mutation engine itself.

@@ -2,9 +2,11 @@
 
 ISO base media file format demuxing, avcC records and sample tables.
 
-**Status: skeleton.** The crate compiles, passes the workspace gates and has
-no dependencies. Its API is specified in `docs/algorithms/` and implemented in
-the phase that owns crate #14.
+**Status: implemented.** `demux` walks the box tree (`size==0`, `size==1`
+largesize and `uuid` forms), resolves `moov → trak → mdia → minf → stbl`,
+expands `stts`/`stsc`/`stsz`/`stco`/`co64`/`ctts`/`stss` into per-sample
+records, and surfaces the `avcC` record of H.264 tracks. Fragmented MP4
+(`moof`/`mvex`) is refused with `Error::Unsupported`.
 
 ## Workspace rules
 
