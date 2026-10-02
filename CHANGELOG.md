@@ -32,6 +32,13 @@ all 23 crate names on the registry first and stops if any is taken.
   policy gates, `fmt`, `clippy -D warnings` and the workspace test suite.
 - Governance: MIT license, contributing guide, security policy, code of
   conduct, issue and pull request templates, CODEOWNERS, Dependabot.
+- `modhash` kit facade (#21): `detect`/`content_hash` (tier-1 SHA-256 over
+  normalized content), `signature` (tier-2: image pHash, audio spectral
+  peaks, text MinHash-128, binary FastCDC chunk sets), `match_`,
+  `describe`; pending modality slots (mp3/mp4/pdf) answer named
+  `Error::Unsupported`. Spec: `docs/algorithms/kit.md`; oracle:
+  `lab/phash_oracle.py` with committed vectors in
+  `modhash/tests/phash_vectors.rs`.
 
 ### Not yet implemented
 

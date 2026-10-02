@@ -53,7 +53,9 @@ impl SplitMix64 {
 /// Each owning phase appends its own name and a matching arm in
 /// `dispatch`, and seeds `fuzz/corpus/<name>/` when its corpus is
 /// file-based. Embedded-seed targets keep their seed in the arm.
-const TARGET_NAMES: &[&str] = &["mp4", "flac"];
+/// `png`/`jpeg`/`bmp`/`audio` were seeded by the facade phase — see
+/// `fuzz/corpus/PROVENANCE.md`.
+const TARGET_NAMES: &[&str] = &["mp4", "flac", "png", "jpeg", "bmp", "audio"];
 
 fn apply(mode: &str, rng: &mut SplitMix64, input: &[u8]) -> Vec<u8> {
     match mode {
@@ -101,9 +103,29 @@ fn dispatch(target: &str, rng: &mut SplitMix64, iters: usize, seed: u64) -> Resu
             modhash_mp4::demux(bytes).map(|_| ())
         }),
         "flac" => fuzz_flac(rng, iters, seed),
-        other if TARGET_NAMES.contains(&other) => Err(format!(
-            "target {other} is registered but has no corpus wired yet"
-        )),
+        "png" => fuzz_codec(rng, iters, seed, "png", |bytes| {
+            // The decoder plus the facade's image lane above it.
+            let _ = modhash::signature(bytes);
+            modhash_png::decode(bytes, &modhash_png::Limits::default()).map(|_| ())
+        }),
+        "jpeg" => fuzz_codec(rng, iters, seed, "jpeg", |bytes| {
+            let _ = modhash::signature(bytes);
+            modhash_jpeg::decode(bytes).map(|_| ())
+        }),
+        "bmp" => fuzz_codec(rng, iters, seed, "bmp", |bytes| {
+            let _ = modhash::signature(bytes);
+            modhash_bmp::decode(bytes).map(|_| ())
+        }),
+        "audio" => fuzz_codec(rng, iters, seed, "audio", |bytes| {
+            // Every audio entry point sees every mutated input: both
+            // decoders and both signature facades, plus the facade.
+            let _ = modhash::signature(bytes);
+            let _ = modhash_wav::decode(bytes);
+            let _ = modhash_flac::decode(bytes, &modhash_flac::Limits::default());
+            let _ = modhash_audio::signature_of_wav(bytes);
+            let _ = modhash_audio::signature_of_flac(bytes);
+            Ok(())
+        }),
         other => Err(format!("unknown target {other}")),
     }
 }
