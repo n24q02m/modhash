@@ -18,8 +18,8 @@
 //! - [`match_`] scores two signatures of the same modality;
 //! - [`describe`] returns both tiers plus modality facts in one call.
 //!
-//! Modality slots whose crates have not landed (mp3 audio, mp4 video,
-//! pdf text) answer [`Error::Unsupported`] naming the modality — the
+//! Modality slots whose crates have not landed (mp4 video, pdf
+//! text) answer [`Error::Unsupported`] naming the modality — the
 //! slot is real and named, the lane is pending.
 //!
 //! `no_std` + `alloc`, like its siblings; the fuzz harness is the crate's
@@ -76,7 +76,7 @@ const BINARY_JACCARD_MIN: f64 = 0.5;
 pub enum Modality {
     /// Decoded raster images (png, jpeg, bmp).
     Image,
-    /// Decoded PCM audio (wav, flac; mp3 pending).
+    /// Decoded PCM audio (wav, flac, mp3).
     Audio,
     /// Canonicalized UTF-8 text (bare text; pdf pending).
     Text,
@@ -153,7 +153,7 @@ pub fn detect(bytes: &[u8]) -> Detection {
         return d(Format::Flac, Modality::Audio, false);
     }
     if is_mp3_magic(bytes) {
-        return d(Format::Mp3, Modality::Audio, true);
+        return d(Format::Mp3, Modality::Audio, false);
     }
     if bytes.len() >= 8 && &bytes[4..8] == b"ftyp" {
         return d(Format::Mp4, Modality::Video, true);
@@ -187,10 +187,12 @@ fn is_mp3_magic(b: &[u8]) -> bool {
         && (b[1] & 0x06) != 0x00
 }
 
-/// The unsupported answer for a pending slot, with the crate named.
+/// The unsupported answer for a pending slot, with the lane named.
 fn pending_err(format: Format, modality: Modality) -> Error {
     let what = match (format, modality) {
-        (Format::Mp3, _) => "modhash-mp3 decoder has not landed",
+        // Mp3 is implemented; this arm is dead code kept so a stale
+        // `pending` flag fails with a descriptive string, not a blank.
+        (Format::Mp3, _) => "modhash-mp3 pending flag left stale (bug)",
         (Format::Mp4, _) | (_, Modality::Video) => {
             "modhash-video/mp4+h264 signature lane has not landed"
         }
@@ -312,6 +314,16 @@ fn decode_audio(bytes: &[u8], format: Format) -> Result<Pcm> {
                 rate: f.sample_rate(),
             })
         }
+        Format::Mp3 => {
+            // modhash-mp3 landed after this facade's spec was written;
+            // it decodes to the same canonical interleaved i32 PCM.
+            let m = modhash_mp3::decode(bytes, &modhash_mp3::Limits::default()).map_err(err)?;
+            Ok(Pcm {
+                samples: m.samples,
+                channels: m.channels,
+                rate: m.sample_rate,
+            })
+        }
         _ => Err(Error::BadValue("not an audio container")),
     }
 }
@@ -359,7 +371,7 @@ fn to_mono(pcm: &Pcm) -> Result<Vec<i32>> {
 ///
 /// # Errors
 ///
-/// [`Error::Unsupported`] on a pending slot (mp3/mp4/pdf),
+/// [`Error::Unsupported`] on a pending slot (mp4/pdf),
 /// [`Error::Decode`] naming the modality when the container is claimed
 /// but corrupt, never a panic.
 pub fn content_hash(bytes: &[u8]) -> Result<Digest<32>> {
@@ -477,7 +489,7 @@ impl Signature {
 
 /// Computes the tier-2 signature of `bytes`, routing on [`detect`].
 ///
-/// Pending slots (mp3, mp4, pdf) answer [`Error::Unsupported`] naming
+/// Pending slots (mp4, pdf) answer [`Error::Unsupported`] naming
 /// the modality. Non-UTF-8, non-container input is `Binary`; valid
 /// UTF-8 without a container magic is `Text`.
 ///

@@ -314,25 +314,43 @@ fn describe_identifies_every_modality() {
     assert!(s.contains("tier2: phash"), "{s}");
 }
 
-/// Pending slots name their modality and refuse: mp3 → audio, mp4 →
-/// video, pdf → text. Never a panic, never a silent binary hash.
+/// mp3 decodes through the audio lane (the crate landed while this
+/// facade was in flight — the pending slot closed under it). A real
+/// fixture proves both tiers; an ID3-tagged non-stream is a named
+/// decode error, not a panic.
+#[test]
+fn mp3_decodes_through_audio_lane() {
+    let mp3 = fixture("l3_short.mp3");
+    let d = detect(&mp3);
+    assert_eq!(
+        (d.format, d.modality, d.pending),
+        (Format::Mp3, Modality::Audio, false)
+    );
+    let desc = describe(&mp3).expect("l3_short must describe");
+    let Facts::Audio { sample_rate, .. } = desc.facts else {
+        panic!("not audio facts")
+    };
+    assert_eq!(sample_rate, 44_100);
+    assert!(matches!(desc.signature, Signature::Audio(_)));
+
+    // An ID3 tag with garbage behind it: detected as mp3, refused by
+    // the decoder, modality named.
+    let junk = b"ID3\x04\x00\x00\x00\x00\x00\x10".to_vec();
+    match signature(&junk) {
+        Err(Error::Decode {
+            modality: Modality::Audio,
+            ..
+        }) => {}
+        other => panic!("id3 junk must be Decode(audio), got {other:?}"),
+    }
+    // MPEG frame-sync bytes detect as mp3 without the tag too.
+    assert_eq!(detect(&[0xFF, 0xFB, 0x90, 0x00]).format, Format::Mp3);
+}
+
+/// Pending slots name their modality and refuse: mp4 → video, pdf →
+/// text. Never a panic, never a silent binary hash.
 #[test]
 fn pending_slots_are_named_unsupported() {
-    let mp3 = b"ID3\x04\x00\x00\x00\x00\x00\x10".to_vec();
-    match describe(&mp3) {
-        Err(Error::Unsupported {
-            modality: Modality::Audio,
-            format: Format::Mp3,
-            what,
-        }) => assert!(what.contains("mp3"), "{what}"),
-        other => panic!("mp3 must be Unsupported(audio), got {other:?}"),
-    }
-    assert!(detect(&mp3).pending);
-
-    // MPEG frame-sync bytes (no ID3) detect the same way.
-    assert!(detect(&[0xFF, 0xFB, 0x90, 0x00]).pending);
-    assert_eq!(detect(&[0xFF, 0xFB, 0x90, 0x00]).format, Format::Mp3);
-
     let mut mp4 = vec![0, 0, 0, 0x20];
     mp4.extend_from_slice(b"ftypisom");
     mp4.extend_from_slice(&[0; 24]);

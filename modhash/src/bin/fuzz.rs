@@ -122,6 +122,7 @@ fn dispatch(target: &str, rng: &mut SplitMix64, iters: usize, seed: u64) -> Resu
             let _ = modhash::signature(bytes);
             let _ = modhash_wav::decode(bytes);
             let _ = modhash_flac::decode(bytes, &modhash_flac::Limits::default());
+            let _ = modhash_mp3::decode(bytes, &modhash_mp3::Limits::default());
             let _ = modhash_audio::signature_of_wav(bytes);
             let _ = modhash_audio::signature_of_flac(bytes);
             Ok(())

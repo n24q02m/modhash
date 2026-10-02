@@ -27,6 +27,10 @@ sha256 truncated to 16 hex digits.
 | bmp/p32_v4_header.bmp | 202 | 3966cad8ac318370 |
 | bmp/p32_x1555.bmp | 146 | 89142ab7a0b0bcc0 |
 | bmp/rle8.bmp | 1110 | 8b7ac308b7a00dac |
+| audio/l3_48k.mp3 | 7244 | e5f55006ecc2a6e7 |
+| audio/l3_short.mp3 | 4640 | 8ce6cf98f137dd7a |
+| audio/reservoir_pair.mp3 | 628 | 1a3739241cd71dee |
 | audio/tone.flac | 24651 | a24fb7556845c0d6 |
 | audio/tone.wav | 88244 | 041f510695ee6121 |
 | audio/tone22.wav | 44144 | 6d2dc990924d8cb1 |
+| mp4/minimal.mp4 | 748 | 53c629c9250c83cf |
