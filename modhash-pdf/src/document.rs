@@ -123,7 +123,7 @@ pub struct Document<'a> {
     objstms: RefCell<BTreeMap<u32, Vec<(u32, Obj)>>>,
 }
 
-impl<'a> Resolve for Document<'a> {
+impl Resolve for Document<'_> {
     fn deref(&self, r: Ref) -> KResult<Obj> {
         self.resolve_obj(r).map_err(|e| match e {
             Error::Kit(k) => k,

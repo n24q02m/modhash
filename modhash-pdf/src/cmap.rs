@@ -44,7 +44,7 @@ fn key(code: u64, len: usize) -> u64 {
 pub(crate) fn code_of_pub(bytes: &[u8]) -> u64 {
     let mut v = 0u64;
     for &b in bytes {
-        v = v << 8 | u64::from(b);
+        v = (v << 8) | u64::from(b);
     }
     v
 }

@@ -371,7 +371,7 @@ fn read_field(row: &[u8], at: usize, width: usize, default: u64) -> u64 {
     }
     let mut v = 0u64;
     for &b in &row[at..at + width] {
-        v = v << 8 | u64::from(b);
+        v = (v << 8) | u64::from(b);
     }
     v
 }
@@ -462,7 +462,7 @@ pub(crate) fn scan_xref(data: &[u8], _limits: &modhash_inflate::Limits) -> Resul
     if trailer.is_none() {
         // find the catalog object and synthesize a trailer
         let mut found: Option<u32> = None;
-        for (&n, _) in map.iter() {
+        for &n in map.keys() {
             if let Ok(p) = parse_obj(
                 data,
                 match map[&n] {

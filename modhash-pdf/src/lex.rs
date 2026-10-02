@@ -287,7 +287,7 @@ impl<'a> Lexer<'a> {
             }
             match hex_val(b) {
                 Some(v) => match hi.take() {
-                    Some(h) => out.push(h << 4 | v),
+                    Some(h) => out.push((h << 4) | v),
                     None => hi = Some(v),
                 },
                 None => return Err(Error::BadValue("hex string character")),

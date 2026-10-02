@@ -338,7 +338,7 @@ fn position_delta(st: &mut TextState, out: &mut String, tx: f64, ty: f64) {
 #[allow(clippy::too_many_arguments)]
 fn position_matrix(
     st: &mut TextState,
-    _out: &mut String,
+    _out: &mut str,
     _a: f64,
     _b: f64,
     _c: f64,

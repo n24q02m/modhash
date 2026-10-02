@@ -575,7 +575,7 @@ fn ascii_hex(data: &[u8]) -> Result<Vec<u8>> {
         }
         match crate::lex::hex_val(b) {
             Some(v) => match hi.take() {
-                Some(h) => out.push(h << 4 | v),
+                Some(h) => out.push((h << 4) | v),
                 None => hi = Some(v),
             },
             None => return Err(Error::BadValue("ASCIIHex character")),
