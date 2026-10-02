@@ -42,6 +42,7 @@ dependencies = [
 name = "modhash-bmp"
 version = "0.1.0"
 dependencies = [
+ "modhash-primitives",
  "modhash-raster",
 ]
 
@@ -93,6 +94,8 @@ dependencies = [
 name = "modhash-jpeg"
 version = "0.1.0"
 dependencies = [
+ "modhash-math",
+ "modhash-primitives",
  "modhash-raster",
 ]
 
@@ -130,6 +133,8 @@ dependencies = [
 name = "modhash-png"
 version = "0.1.0"
 dependencies = [
+ "modhash-inflate",
+ "modhash-primitives",
  "modhash-raster",
 ]
 

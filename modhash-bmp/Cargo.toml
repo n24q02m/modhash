@@ -10,6 +10,7 @@ readme = "README.md"
 categories = ["algorithms", "cryptography"]
 
 [dependencies]
+modhash-primitives = { path = "../modhash-primitives", version = "0.1.0" }
 modhash-raster = { path = "../modhash-raster", version = "0.1.0" }
 
 [lints.rust]
