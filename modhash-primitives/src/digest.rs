@@ -1,19 +1,26 @@
 //! The fixed-width digest value and the byte source it is read from.
 
 use core::fmt;
+use core::fmt::Write as _;
 
 use crate::error::{Error, Result};
 
-/// The lowercase hex alphabet [`Digest::to_hex`] emits.
+/// The lowercase hex alphabet [`Digest::to_hex_into`] writes.
 const HEX: &[u8; 16] = b"0123456789abcdef";
+
+/// One-character hex digits for [`fmt::Display`], so the streaming
+/// formatter never needs a `2 * N` buffer.
+const HEX_DIGIT: [&str; 16] = [
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f",
+];
 
 /// A fixed-width hash value of `N` bytes.
 ///
 /// `N` is the output width in bytes. The value is copied around by
 /// value: it is small, and hex output in this workspace is compared
-/// byte-for-byte against specification vectors constantly, so the fixed
-/// array is the whole point — [`to_hex`](Digest::to_hex) returns
-/// `[u8; 2 * N]`, never a heap string.
+/// byte-for-byte against specification vectors constantly, so hex
+/// encoding never allocates — [`to_hex_into`](Digest::to_hex_into)
+/// writes into a caller-owned fixed buffer, not a heap string.
 ///
 /// [`Default`] is the all-zero value and is *not* a valid hash of
 /// anything: a zeroed buffer is what a failed hash computation tends to
@@ -38,6 +45,9 @@ impl<const N: usize> Default for Digest<N> {
 }
 
 impl<const N: usize> Digest<N> {
+    /// The number of characters in the hex form: exactly `2 * N`.
+    pub const HEX_LEN: usize = 2 * N;
+
     /// Wraps `N` bytes. Never fails.
     ///
     /// ```
@@ -53,24 +63,34 @@ impl<const N: usize> Digest<N> {
         &self.bytes
     }
 
-    /// Lowercase hexadecimal as a fixed `[u8; 2 * N]` array.
+    /// Writes the lowercase hexadecimal form into `out`.
     ///
-    /// No allocation and no `hex` crate: the output is a fixed-size
-    /// array precisely so comparing against a specification vector never
-    /// pays for a heap string. Leading zeroes are kept — the output is
-    /// exactly `2 * N` characters.
+    /// `out` must be exactly [`HEX_LEN`](Self::HEX_LEN) bytes; any other
+    /// length is [`Error::BadValue`](`crate::Error::BadValue`) `"hex
+    /// buffer length"`. No allocation, no `hex` crate, and leading
+    /// zeroes are kept — the output is exactly `2 * N` characters.
+    ///
+    /// The buffer is caller-owned rather than returned because stable
+    /// Rust cannot name the type `[u8; 2 * N]` inside a generic
+    /// context (that needs `generic_const_exprs`, still unstable at the
+    /// workspace MSRV); at a concrete `N` the caller's array is a plain
+    /// constant-sized type.
     ///
     /// ```
     /// let d = modhash_primitives::Digest::<2>::from_bytes([0x00, 0xff]);
-    /// assert_eq!(&d.to_hex()[..], b"00ff");
+    /// let mut hex = [0u8; 4];
+    /// d.to_hex_into(&mut hex).unwrap();
+    /// assert_eq!(&hex[..], b"00ff");
     /// ```
-    pub fn to_hex(self) -> [u8; 2 * N] {
-        let mut out = [0u8; 2 * N];
+    pub fn to_hex_into(self, out: &mut [u8]) -> Result<()> {
+        if out.len() != Self::HEX_LEN {
+            return Err(Error::BadValue("hex buffer length"));
+        }
         for (i, &byte) in self.bytes.iter().enumerate() {
             out[2 * i] = HEX[usize::from(byte >> 4)];
             out[2 * i + 1] = HEX[usize::from(byte & 0x0f)];
         }
-        out
+        Ok(())
     }
 
     /// Parses exactly `2 * N` hexadecimal characters, lowercase or
@@ -155,10 +175,28 @@ impl<const N: usize> Digest<N> {
 
 impl<const N: usize> fmt::Display for Digest<N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // The same bytes `to_hex` produces, by construction: this impl
-        // calls it, so the two paths cannot drift apart.
-        let hex = self.to_hex();
-        f.pad(core::str::from_utf8(&hex).map_err(|_| fmt::Error)?)
+        // Streams the same digits `to_hex_into` writes, one character
+        // pair per byte, so the two paths cannot drift apart. Fill,
+        // alignment and width are honoured by hand: a generic `[u8;
+        // 2 * N]` buffer cannot exist here (see `to_hex_into`).
+        let pad = f.width().map_or(0, |w| w.saturating_sub(2 * N));
+        let fill = f.fill();
+        let (before, after) = match f.align().unwrap_or(fmt::Alignment::Left) {
+            fmt::Alignment::Left => (0, pad),
+            fmt::Alignment::Right => (pad, 0),
+            fmt::Alignment::Center => (pad / 2, pad - pad / 2),
+        };
+        for _ in 0..before {
+            f.write_char(fill)?;
+        }
+        for &byte in self.bytes.iter() {
+            f.write_str(HEX_DIGIT[usize::from(byte >> 4)])?;
+            f.write_str(HEX_DIGIT[usize::from(byte & 0x0f)])?;
+        }
+        for _ in 0..after {
+            f.write_char(fill)?;
+        }
+        Ok(())
     }
 }
 

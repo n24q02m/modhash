@@ -51,7 +51,11 @@ pub enum Error {
 impl Error {
     /// Builds [`Error::Truncated`] without spelling the struct literal.
     pub fn truncated(what: &'static str, needed: usize, found: usize) -> Self {
-        Self::Truncated { what, needed, found }
+        Self::Truncated {
+            what,
+            needed,
+            found,
+        }
     }
 
     /// Builds [`Error::TooLarge`] without spelling the struct literal.
@@ -86,7 +90,6 @@ impl fmt::Display for Error {
         }
     }
 }
-
 
 /// The result type used by every fallible operation in the kit. The
 /// error type defaults to [`Error`], which is what the kit's own APIs

@@ -55,6 +55,9 @@ impl Algorithm {
     /// [`Algorithm::Unknown`], never an error, so records written by a
     /// future version stay readable. Matching is exact and
     /// case-sensitive: `"SHA256"` is `Unknown`.
+    // The spec pins this name and this shape: an inherent function
+    // returning `Self`, not `FromStr`, because parsing never fails.
+    #[expect(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s {
             "sha1" => Algorithm::Sha1,
@@ -148,6 +151,8 @@ impl Format {
     /// [`Format::Unknown`], never an error, so records written by a
     /// future version stay readable. Matching is exact and
     /// case-sensitive.
+    // Same spec-pinned shape as `Algorithm::from_str`.
+    #[expect(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s {
             "png" => Format::Png,

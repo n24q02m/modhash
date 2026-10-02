@@ -8,7 +8,9 @@ use crate::digest::Digest;
 /// sides are widened, as [`hamming`] does, the padding is identical and
 /// cancels out in the XOR.
 fn widen(chunk: &[u8]) -> u64 {
-    chunk.iter().fold(0u64, |acc, &byte| (acc << 8) | u64::from(byte))
+    chunk
+        .iter()
+        .fold(0u64, |acc, &byte| (acc << 8) | u64::from(byte))
 }
 
 /// The number of differing bits between two digests.

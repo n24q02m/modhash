@@ -1,6 +1,9 @@
 # `modhash-primitives` - the shared vocabulary
 
-Status: specified, not yet implemented. This is the crate every other crate in
+Status: implemented. The `to_hex` entry below deviates from the original
+draft for a stable-Rust reason; the note on that row is binding.
+
+This is the crate every other crate in
 the workspace depends on, so its surface is fixed before any consumer is
 written. Adding a type later is cheap; changing one after twenty crates have
 been written against it is not.
@@ -79,18 +82,28 @@ Methods:
 |---|---|
 | `from_bytes([u8; N]) -> Self` | wrap, never fail |
 | `as_bytes(&self) -> &[u8; N]` | borrow |
-| `to_hex(self) -> [u8; 2 * N]` | lowercase hex, no allocation, no `hex` crate |
+| `HEX_LEN` | associated const, exactly `2 * N`; the size of the hex buffer |
+| `to_hex_into(self, &mut [u8]) -> Result<()>` | lowercase hex into a caller-owned buffer of exactly `HEX_LEN` bytes; no allocation, no `hex` crate |
 | `from_hex(&[u8]) -> Result<Self>` | rejects odd length, rejects non-hex, rejects wrong `N` |
 | `from_slice(&[u8]) -> Result<Self>` | rejects wrong length |
 | `from_stream(&mut impl Read) -> Result<Self>` | reads exactly `N` bytes; short read is `Truncated` |
 
-`to_hex` is a fixed-size array, not a `String`. Hex output in this workspace is
-compared byte-for-byte against specification vectors constantly; a heap
-allocation per comparison is the wrong trade, and returning a `String` would
-make the common case pay for the rare one.
+`to_hex_into` writes into a caller-owned fixed buffer instead of returning
+`[u8; 2 * N]`, because stable Rust cannot name `[u8; 2 * N]` inside a
+generic context — that needs `generic_const_exprs`, which is still unstable
+at the workspace MSRV (verified against 1.85 and current stable: the type
+position `[u8; 2 * N]` and even associated-const projections into it are
+both rejected). At a concrete `N` the caller's `[u8; 2 * N]` array is a
+plain constant-sized type, so the caller owns it:
+`let mut hex = [0u8; 64]; d.to_hex_into(&mut hex)?;`. The intent is
+unchanged: hex output in this workspace is compared byte-for-byte against
+specification vectors constantly; a heap allocation per comparison is the
+wrong trade, and returning a `String` would make the common case pay for
+the rare one.
 
-Implement `Display` as the lowercase hex form, so `format!("{digest}")` and
-`digest.to_hex()` cannot drift apart.
+Implement `Display` as the lowercase hex form, streaming one character
+pair per byte, so `format!("{digest}")` and `to_hex_into` cannot drift
+apart.
 
 ### Hamming distance
 

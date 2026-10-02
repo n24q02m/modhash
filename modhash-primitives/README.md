@@ -2,9 +2,10 @@
 
 Hash primitives, checksums and byte readers used across the kit.
 
-**Status: skeleton.** The crate compiles, passes the workspace gates and has
-no dependencies. Its API is specified in `docs/algorithms/` and implemented in
-the phase that owns crate #0.
+**Status: implemented** per `docs/algorithms/primitives.md` (the one
+deviation, the buffer-based `to_hex_into`, is documented there). The
+crate exports `Error`/`Result`, `Digest<N>`, the `Read` trait
+`Digest::from_stream` reads from, `hamming`, `Algorithm` and `Format`.
 
 ## Workspace rules
 

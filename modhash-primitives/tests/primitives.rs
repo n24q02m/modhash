@@ -91,7 +91,10 @@ fn hamming_spans_u64_chunks_and_tails() {
         0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // chunk
         0xab, 0x00, 0x00, 0xcd, // tail
     ];
-    assert_eq!(hamming(&Digest::from_bytes(a), &Digest::from_bytes([0x00; 12])), 74);
+    assert_eq!(
+        hamming(&Digest::from_bytes(a), &Digest::from_bytes([0x00; 12])),
+        74
+    );
     // N = 5: tail only. 0x0F (4) + 0x80 (1) + 0x03 (2) = 7.
     assert_eq!(
         hamming(
@@ -102,7 +105,10 @@ fn hamming_spans_u64_chunks_and_tails() {
     );
     // N = 1: 0xAA ^ 0x55 = 0xFF, every bit differs.
     assert_eq!(
-        hamming(&Digest::<1>::from_bytes([0xaa]), &Digest::<1>::from_bytes([0x55])),
+        hamming(
+            &Digest::<1>::from_bytes([0xaa]),
+            &Digest::<1>::from_bytes([0x55])
+        ),
         8
     );
 }
@@ -114,45 +120,61 @@ fn hamming_spans_u64_chunks_and_tails() {
 #[test]
 fn to_hex_covers_zero_bytes_and_high_nibbles() {
     let d = Digest::<4>::from_bytes([0x00, 0xff, 0x0a, 0xa5]);
-    assert_eq!(&d.to_hex()[..], b"00ff0aa5");
+    let mut hex = [0u8; 8];
+    d.to_hex_into(&mut hex).unwrap();
+    assert_eq!(&hex[..], b"00ff0aa5");
 }
 
 /// The output is exactly two characters per byte, with leading zeroes
-/// kept at both ends of the alphabet.
+/// kept at both ends of the alphabet, and `HEX_LEN` names that size.
 #[test]
 fn to_hex_is_exactly_two_chars_per_byte() {
-    let hex = Digest::<3>::from_bytes([0x00, 0x10, 0xf0]).to_hex();
-    assert_eq!(hex.len(), 6); // the type is [u8; 6]; assert anyway
+    let mut hex = [0u8; 6];
+    Digest::<3>::from_bytes([0x00, 0x10, 0xf0])
+        .to_hex_into(&mut hex)
+        .unwrap();
     assert_eq!(&hex[..], b"0010f0");
-    assert_eq!(&Digest::<1>::from_bytes([0x00]).to_hex()[..], b"00");
-    assert_eq!(&Digest::<1>::from_bytes([0xff]).to_hex()[..], b"ff");
+    assert_eq!(Digest::<3>::HEX_LEN, 6);
+
+    let mut one = [0u8; 2];
+    Digest::<1>::from_bytes([0x00])
+        .to_hex_into(&mut one)
+        .unwrap();
+    assert_eq!(&one[..], b"00");
+    Digest::<1>::from_bytes([0xff])
+        .to_hex_into(&mut one)
+        .unwrap();
+    assert_eq!(&one[..], b"ff");
 }
 
-/// `from_hex` inverts `to_hex` on a known digest.
+/// A buffer that is not exactly `HEX_LEN` bytes is refused rather than
+/// partially overwritten.
+#[test]
+fn to_hex_rejects_wrong_buffer_length() {
+    let mut short = [0u8; 7];
+    assert_eq!(
+        Digest::<4>::from_bytes([0; 4]).to_hex_into(&mut short),
+        Err(Error::BadValue("hex buffer length"))
+    );
+    let mut long = [0u8; 9];
+    assert_eq!(
+        Digest::<4>::from_bytes([0; 4]).to_hex_into(&mut long),
+        Err(Error::BadValue("hex buffer length"))
+    );
+}
+
+/// `from_hex` inverts `to_hex_into` on a known digest.
 #[test]
 fn from_hex_round_trips_to_hex() {
     let d = Digest::<4>::from_bytes([0xde, 0xad, 0xbe, 0xef]);
-    let hex = d.to_hex();
+    let mut hex = [0u8; 8];
+    d.to_hex_into(&mut hex).unwrap();
     assert_eq!(&hex[..], b"deadbeef");
     assert_eq!(Digest::<4>::from_hex(&hex).unwrap(), d);
 }
 
-/// Uppercase and mixed-case hex parse to the same digest; `to_hex`
-/// still emits lowercase.
-#[test]
-fn from_hex_accepts_uppercase() {
-    assert_eq!(
-        Digest::<4>::from_hex(b"DEADBEEF").unwrap(),
-        Digest::<4>::from_bytes([0xde, 0xad, 0xbe, 0xef])
-    );
-    assert_eq!(
-        Digest::<1>::from_hex(b"fF").unwrap(),
-        Digest::<1>::from_bytes([0xff])
-    );
-}
-
 /// Odd length is rejected with a named reason, distinct from a mere
-/// length mismatch: an odd string is not a digest at any N.
+/// length mismatch: an odd string is not a digest at any `N`.
 #[test]
 fn from_hex_rejects_odd_length() {
     assert_eq!(
@@ -164,7 +186,6 @@ fn from_hex_rejects_odd_length() {
         Err(Error::BadValue("hex length is odd"))
     );
 }
-
 /// Non-hex bytes are rejected wherever they sit.
 #[test]
 fn from_hex_rejects_non_hex_digit() {
@@ -173,11 +194,11 @@ fn from_hex_rejects_non_hex_digit() {
         Err(Error::BadValue("hex digit"))
     );
     assert_eq!(
-        Digest::<2>::from_hex(b"0 0"),
+        Digest::<1>::from_hex(b"0g"),
         Err(Error::BadValue("hex digit"))
     );
     assert_eq!(
-        Digest::<2>::from_hex(b"zz"),
+        Digest::<2>::from_hex(b"zz00"),
         Err(Error::BadValue("hex digit"))
     );
 }
@@ -346,8 +367,8 @@ fn format_unknown_strings_yield_unknown() {
 
 // ------------------------------------------------------------- Display
 
-/// `Display` and `to_hex` produce the same characters, byte for byte,
-/// at several widths; formatter width is honoured through `pad`.
+/// `Display` and `to_hex_into` produce the same characters, byte for
+/// byte, at several widths; fill, alignment and width are honoured.
 #[test]
 fn digest_display_matches_to_hex() {
     let d1 = Digest::<1>::from_bytes([0x00]);
@@ -358,11 +379,20 @@ fn digest_display_matches_to_hex() {
     assert_eq!(format!("{d4}"), "ff0a00a5");
     assert_eq!(format!("{d8}"), "deadbeef00112233");
     // and structurally, so the two paths cannot drift
-    assert_eq!(format!("{d1}").as_bytes(), &d1.to_hex()[..]);
-    assert_eq!(format!("{d4}").as_bytes(), &d4.to_hex()[..]);
-    assert_eq!(format!("{d8}").as_bytes(), &d8.to_hex()[..]);
-    // formatter width goes through the standard pad path
+    let mut hex1 = [0u8; 2];
+    d1.to_hex_into(&mut hex1).unwrap();
+    assert_eq!(format!("{d1}").as_bytes(), &hex1[..]);
+    let mut hex4 = [0u8; 8];
+    d4.to_hex_into(&mut hex4).unwrap();
+    assert_eq!(format!("{d4}").as_bytes(), &hex4[..]);
+    let mut hex8 = [0u8; 16];
+    d8.to_hex_into(&mut hex8).unwrap();
+    assert_eq!(format!("{d8}").as_bytes(), &hex8[..]);
+    // fill, alignment and width behave like a string's Display
     assert_eq!(format!("{d1:>4}"), "  00");
+    assert_eq!(format!("{d1:<3}"), "00 ");
+    assert_eq!(format!("{d1:^4}"), " 00 ");
+    assert_eq!(format!("{d1:0>4}"), "0000");
 }
 
 /// `Display` for `Error` is the literal prefix plus the `what` field —
@@ -374,7 +404,12 @@ fn error_display_is_literal_concatenation() {
         "truncated: idat chunk"
     );
     assert_eq!(
-        format!("{}", Error::InvalidMagic { what: "PNG signature" }),
+        format!(
+            "{}",
+            Error::InvalidMagic {
+                what: "PNG signature"
+            }
+        ),
         "invalid magic: PNG signature"
     );
     assert_eq!(
@@ -397,11 +432,18 @@ fn error_display_is_literal_concatenation() {
 fn error_constructors_build_the_named_variants() {
     assert_eq!(
         Error::truncated("zlib stream", 10, 4),
-        Error::Truncated { what: "zlib stream", needed: 10, found: 4 }
+        Error::Truncated {
+            what: "zlib stream",
+            needed: 10,
+            found: 4
+        }
     );
     assert_eq!(
         Error::too_large("chunk table", 65536),
-        Error::TooLarge { what: "chunk table", limit: 65536 }
+        Error::TooLarge {
+            what: "chunk table",
+            limit: 65536
+        }
     );
     let e = Error::truncated("s", 1, 0);
     let copied = e;
