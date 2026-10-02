@@ -2,9 +2,11 @@
 
 Raw image buffers, box-average resampling, BT.601 luma and EXIF orientation.
 
-**Status: skeleton.** The crate compiles, passes the workspace gates and has
-no dependencies. Its API is specified in `docs/algorithms/` and implemented in
-the phase that owns crate #4.
+**Status: implemented.** Tight row-major `Image<L, T>` buffers (`Gray`,
+`Rgb`, `Rgba` layouts; `u8`/`u16` samples), `box_average` resampling with
+integer floor boundaries and `round_half_up`, BT.601 luma, and EXIF
+orientation 1–8 via the eight public dihedral transforms. Conventions are
+pinned in `docs/algorithms/raster.md`.
 
 ## Workspace rules
 
