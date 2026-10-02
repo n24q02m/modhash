@@ -154,6 +154,11 @@ fn fuzz_coremode(rng: &mut SplitMix64, iters: usize, seed: u64) -> Result<(), St
 fn usage() -> String {
     let mut s = String::from("usage: fuzz <target> <iters> <seed>\n\ntargets:\n");
     s.push_str("  coremode  mutation engine self-check\n");
+    // TARGET_NAMES is a `const` that is currently empty, so on the MSRV
+    // toolchain clippy can const-fold this to `true` and rejects the branch
+    // as dead code. The check becomes load-bearing the moment the first codec
+    // target is registered.
+    #[allow(clippy::const_is_empty)]
     if TARGET_NAMES.is_empty() {
         s.push_str("  (no codec targets registered yet - each codec phase adds its own)\n");
     } else {
