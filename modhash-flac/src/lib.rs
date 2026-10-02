@@ -15,7 +15,7 @@
 //! no MD5 primitive — and no check compares decoded length against the
 //! declared total, so a stream that ends early decodes what it has.
 //!
-//! The crate is `no_std` apart from the `alloc` [`Vec`](alloc::vec::Vec)
+//! The crate is `no_std` apart from the `alloc` [`Vec`]
 //! its API returns. Samples are computed in `i64` (a stereo side channel
 //! is coded one bit wider than the input) and narrowed to `i32` only
 //! after decorrelation, matching the canonical PCM shape `modhash-wav`

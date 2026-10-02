@@ -19,3 +19,7 @@ missing_docs = "deny"
 [[bin]]
 name = "modhash"
 path = "src/main.rs"
+# rustdoc collision: this bin's `modhash` docs would overwrite the kit
+# crate's `target/doc/modhash/index.html`. CLI usage docs live in
+# docs/ (rendered site) instead.
+doc = false

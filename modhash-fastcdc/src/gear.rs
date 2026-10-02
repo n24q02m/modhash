@@ -75,7 +75,7 @@ impl Gear {
 
     /// Rolls `byte` into the window and returns the new fingerprint.
     ///
-    /// Equivalent to [`gear_update`] applied to the stored fingerprint.
+    /// Equivalent to `gear_update` applied to the stored fingerprint.
     pub fn push(&mut self, byte: u8) -> u64 {
         self.fp = gear_update(self.fp, byte);
         self.fp

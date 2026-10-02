@@ -153,7 +153,7 @@ fn cut(source: &[u8], params: Params, mask_s: u64, mask_l: u64) -> (u64, usize) 
 /// Iterator over the content-defined chunks of a byte slice.
 ///
 /// Created by [`FastCdc::new`] / [`FastCdc::with_level`]. Each step calls
-/// [`cut`] on the remainder, so `N` chunks cost `N` linear scans of the
+/// `cut` on the remainder, so `N` chunks cost `N` linear scans of the
 /// bytes they cover — O(source length) overall.
 #[derive(Clone, Debug)]
 pub struct FastCdc<'a> {

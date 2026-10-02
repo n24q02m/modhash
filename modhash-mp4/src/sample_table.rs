@@ -147,7 +147,7 @@ pub struct SampleTable {
 impl SampleTable {
     /// True when `index` (0-based) is a sync sample. Without an `stss` box
     /// every sample is sync; with one, membership decides. `stss` contents
-    /// are validated in [`crate::parse_stbl`] to be sorted and in range, so a
+    /// are validated in `parse_stbl` to be sorted and in range, so a
     /// plain binary search is correct.
     pub fn is_keyframe(&self, index: usize) -> bool {
         match &self.sync {

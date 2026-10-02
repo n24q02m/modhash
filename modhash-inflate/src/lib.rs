@@ -17,7 +17,7 @@
 //! Every entry point takes a [`Limits`]. A decompression API without a size
 //! ceiling is a denial-of-service primitive: a few hundred bytes of input
 //! expand to gigabytes. The crate is `no_std` apart from the `alloc`
-//! [`Vec`](alloc::vec::Vec) its API returns, and no allocation is ever sized
+//! [`Vec`] its API returns, and no allocation is ever sized
 //! from a length field read out of the stream without being clamped first.
 //!
 //! DEFLATE packs bits least-significant bit first: the first byte's bit 0 is

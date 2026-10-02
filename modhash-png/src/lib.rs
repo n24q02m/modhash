@@ -27,8 +27,7 @@
 //! round-trip: it writes non-interlaced zlib streams of stored DEFLATE
 //! blocks, one filter per file. It is test scaffolding, not a compressor.
 //!
-//! The crate is `no_std` apart from the `alloc` [`Vec`](alloc::vec::Vec)
-//! its API returns.
+//! The crate is `no_std` apart from the `alloc` [`Vec`] its API returns.
 
 #![no_std]
 #![forbid(unsafe_code)]

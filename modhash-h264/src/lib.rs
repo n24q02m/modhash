@@ -31,7 +31,7 @@
 //!   that mark references long-term error out rather than guess.
 //!
 //! The stream must be Annex-B framed; `avcC` length-prefixed NALs are
-//! [`modhash_mp4`]'s demux concern, not this crate's.
+//! `modhash_mp4`'s demux concern, not this crate's.
 //!
 //! Decoding is deterministic and single-threaded by construction; the
 //! output is the reconstructed picture as decoded, with frame cropping

@@ -29,7 +29,7 @@
 //!    kit.md §3 verbatim ([`frame_phash`]), producing an ordered
 //!    `u64` chain.
 //! 6. Tier-2 signature = the chain plus a 128-word MinHash over its
-//!    consecutive 3-frame-hash shingles ([`minhash`]).
+//!    consecutive 3-frame-hash shingles (`minhash`).
 //!
 //! [`match_score`] compares two chains *in temporal order*: index-wise
 //! over `min(len)` with a frame match = Hamming ≤ [`FRAME_HAMMING_MAX`].

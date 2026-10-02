@@ -14,8 +14,8 @@
 //!
 //! Fragmented MP4 (`moof`/`mvex`) is a real format variant a sample-table
 //! demuxer cannot answer honestly, so it is refused with
-//! [`Error::Unsupported`]; everything malformed or short fails
-//! [`Error::Truncated`] or [`Error::BadValue`], and no input can panic the
+//! `Error::Unsupported`; everything malformed or short fails
+//! `Error::Truncated` or `Error::BadValue`, and no input can panic the
 //! parser — every read goes through bounds-checked helpers.
 //!
 //! The crate is `no_std` apart from the `alloc` collections its API returns.

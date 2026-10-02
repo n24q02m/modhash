@@ -15,7 +15,7 @@
 //!
 //! The crate is `no_std` apart from the `alloc` [`Vec`](alloc::vec::Vec)
 //! the buffers own, and every allocation is capped by
-//! [`MAX_BUFFER_BYTES`](crate::raster::MAX_BUFFER_BYTES) before a byte is
+//! [`MAX_BUFFER_BYTES`] before a byte is
 //! reserved.
 
 #![no_std]

@@ -7,7 +7,7 @@
 //! path dependencies, so the whole kit resolves without a single registry
 //! package. This crate reads crate `modhash-inflate` (#1) for raw DEFLATE
 //! and `modhash-primitives` (#0) for CRC-32 verification and the shared
-//! [`Error`]/[`Result`] vocabulary.
+//! `Error`/`Result` vocabulary.
 //!
 //! # ZIP scope (APPNOTE.TXT §4.3 and §4.4)
 //!
@@ -20,7 +20,7 @@
 //! hands a wrong hash to the tier-1 layer above.
 //!
 //! Real format variants outside that scope are refused with
-//! [`Error::Unsupported`], never mis-decoded: ZIP64 records or sentinel
+//! `Error::Unsupported`, never mis-decoded: ZIP64 records or sentinel
 //! fields, encrypted entries (flags bit 0, strong encryption bit 6, or the
 //! masked-local-header bit 13), multi-disk archives, and compression
 //! methods other than 0 and 8. Data descriptors (flags bit 3) are

@@ -74,8 +74,8 @@ impl Layout for Rgba {
 /// One channel value of a pixel: `u8` for the 8-bit formats, `u16` for
 /// PNG's 16-bit variants.
 ///
-/// Sealed to `u8` and `u16` so arithmetic in [`crate::color`] and
-/// [`crate::resample`] can widen to `u64` with a single conversion and
+/// Sealed to `u8` and `u16` so arithmetic in `crate::color` and
+/// `crate::resample` can widen to `u64` with a single conversion and
 /// never check an upper bound again.
 pub trait Sample: sealed::Sealed + Copy + Default + Eq {
     /// Widens the sample to `u64` for accumulation.

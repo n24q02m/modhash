@@ -207,7 +207,7 @@ impl<'a> Document<'a> {
     }
 
     /// `true` when the trailer declares `/Encrypt`. Text extraction refuses
-    /// encrypted documents with [`Error::Unsupported`]-bearing errors.
+    /// encrypted documents with `Error::Unsupported`-bearing errors.
     pub fn is_encrypted(&self) -> bool {
         self.encrypt.is_some()
     }

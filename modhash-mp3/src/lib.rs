@@ -25,14 +25,14 @@
 //!
 //! # Lay of the land
 //!
-//! - [`header`]: the 32-bit frame header, CBR/VBR frame sizing.
-//! - [`layer12`]: Layer I/II subband decoders (allocation, scfsi,
+//! - `header`: the 32-bit frame header, CBR/VBR frame sizing.
+//! - `layer12`: Layer I/II subband decoders (allocation, scfsi,
 //!   scalefactors, grouped dequantization).
-//! - [`layer3`]: Layer III — side info, bit reservoir, scalefactors,
+//! - `layer3`: Layer III — side info, bit reservoir, scalefactors,
 //!   Huffman requantization, stereo, antialias, IMDCT, overlap.
-//! - [`synthesis`]: the polyphase synthesis filterbank (shared).
-//! - [`crc`]: the CRC-16 that can protect every layer's side info.
-//! - [`tables`]/[`hufftab`]: generated constants (see `lab/mp3/`).
+//! - `synthesis`: the polyphase synthesis filterbank (shared).
+//! - `crc`: the CRC-16 that can protect every layer's side info.
+//! - `tables`/`hufftab`: generated constants (see `lab/mp3/`).
 //!
 //! # Errors
 //!
