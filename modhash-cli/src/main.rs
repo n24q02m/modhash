@@ -345,15 +345,17 @@ fn cmd_match(args: &[String]) -> u8 {
     match modhash::match_(&sa, &sb) {
         Ok(outcome) => {
             let matched = modhash_cli::is_match(&outcome);
+            let dist = modhash_cli::distance(&sa, &sb).unwrap_or(u32::MAX);
             if o.json {
                 println!(
-                    "{{\"a\": {}, \"b\": {}, \"modality\": \"{}\", \"score\": {}, \"bound\": {}, \"matched\": {}}}",
+                    "{{\"a\": {}, \"b\": {}, \"modality\": \"{}\", \"score\": {}, \"distance\": {}, \"bound\": {}, \"matched\": {}}}",
                     modhash_cli::json_string(pa),
                     modhash_cli::json_string(pb),
                     sa.modality().as_str(),
                     modhash_cli::json_string(
                         modhash_cli::score_line(&outcome).trim_start_matches("score: ")
                     ),
+                    dist,
                     modhash_cli::json_string(
                         modhash_cli::bound_line(&outcome).trim_start_matches("advisory: ")
                     ),
@@ -362,6 +364,7 @@ fn cmd_match(args: &[String]) -> u8 {
             } else {
                 println!("modality: {}", sa.modality());
                 println!("{}", modhash_cli::score_line(&outcome));
+                println!("distance: {dist}");
                 println!("verdict: {}", if matched { "match" } else { "no-match" });
                 println!("{}", modhash_cli::bound_line(&outcome));
             }
