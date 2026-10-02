@@ -2,9 +2,12 @@
 
 FastCDC content-defined chunking with a 16-level gear mask table.
 
-**Status: skeleton.** The crate compiles, passes the workspace gates and has
-no dependencies. Its API is specified in `docs/algorithms/` and implemented in
-the phase that owns crate #9.
+Implements the FastCDC algorithm (Wen Xia et al., USENIX ATC 2016): Gear
+rolling fingerprint, zero-padded `fp & mask == 0` hash judgment,
+sub-minimum cut-point skipping, and normalized chunking across the
+16-level mask table. Also exports `Buzhash64`, a rotate-XOR rolling hash
+over a fixed 64-byte window, for chunk fingerprinting. Specification and
+verbatim constants: `docs/algorithms/fastcdc.md`.
 
 ## Workspace rules
 
