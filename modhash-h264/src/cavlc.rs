@@ -162,6 +162,7 @@ fn level_prefix(br: &mut Br<'_>) -> Result<u32> {
 /// (spec 9.2.1); it is ignored for [`BlockKind::ChromaDc`].
 pub(crate) fn decode_block(br: &mut Br<'_>, nc: i32, kind: BlockKind) -> Result<Residual> {
     let max_coeff = kind.max_coeff();
+    #[allow(unused_variables)] // consumed only by stde! (debug tracing)
     let pos0 = br.position();
     let (total_coeff, trailing_ones) = coeff_token(br, nc)?;
     stde!(
@@ -202,6 +203,7 @@ pub(crate) fn decode_block(br: &mut Br<'_>, nc: i32, kind: BlockKind) -> Result<
         // than 3 trailing ones were seen.
         let mut suffix_length: u32 = u32::from(total > 10 && t1 < 3);
         for (i, l) in level.iter_mut().enumerate().take(total).skip(t1) {
+            #[allow(unused_variables)] // consumed only by stde! (debug tracing)
             let lp_pos = br.position();
             let prefix = level_prefix(br)? as i64;
             stde!(
@@ -265,6 +267,7 @@ pub(crate) fn decode_block(br: &mut Br<'_>, nc: i32, kind: BlockKind) -> Result<
                 &TOTAL_ZEROS_BITS[total - 1][..],
             ),
         };
+        #[allow(unused_variables)] // consumed only by stde! (debug tracing)
         let tz_pos = br.position();
         let idx = vlc(br, lens, bits)?;
         stde!("      total_zeros {idx} @ {tz_pos} -> {}", br.position());
@@ -281,6 +284,7 @@ pub(crate) fn decode_block(br: &mut Br<'_>, nc: i32, kind: BlockKind) -> Result<
     for &lv in level.iter().take(total).skip(1) {
         let run_before = if zeros > 0 {
             let row = (zeros - 1).min(6);
+            #[allow(unused_variables)] // consumed only by stde! (debug tracing)
             let rb_pos = br.position();
             let v = vlc(br, &RUN_BEFORE_LENS[row], &RUN_BEFORE_BITS[row])?;
             stde!(
