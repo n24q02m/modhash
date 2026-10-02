@@ -197,8 +197,8 @@ pub fn dedup_inputs(inputs: &[Input], threshold: Option<u32>) -> DedupReport {
     // Pass 3: gather clusters keyed by root; members stay in input
     // order, groups sort by smallest member index.
     let mut by_root: Vec<(usize, Vec<usize>)> = Vec::new();
-    for i in 0..n {
-        if sigs[i].is_none() {
+    for (i, sig) in sigs.iter().enumerate() {
+        if sig.is_none() {
             continue;
         }
         let r = root(&mut parent, i);
@@ -339,8 +339,8 @@ pub mod fixture {
             for x in 0..w as usize {
                 let u = x as f64 / w as f64;
                 let v = y as f64 / h as f64;
-                let r = 127.5 + 120.0 * (u * fx * 6.2832 + p1).sin();
-                let g = 127.5 + 120.0 * (v * fy * 6.2832 + p2).sin();
+                let r = 127.5 + 120.0 * (u * fx * std::f64::consts::TAU + p1).sin();
+                let g = 127.5 + 120.0 * (v * fy * std::f64::consts::TAU + p2).sin();
                 let b = 127.5 + 120.0 * ((u + v) * (fx + fy) + p1 + p2).sin();
                 px.extend_from_slice(&[r as u8, g as u8, b as u8]);
             }
@@ -425,9 +425,9 @@ pub mod fixture {
         (0..n)
             .map(|i| {
                 let t = i as f64 / 44_100.0;
-                let s = 0.6 * (t * base * 6.2832).sin()
-                    + 0.25 * (t * base * 2.0 * 6.2832).sin()
-                    + 0.15 * (t * base * 3.7 * 6.2832).sin();
+                let s = 0.6 * (t * base * std::f64::consts::TAU).sin()
+                    + 0.25 * (t * base * 2.0 * std::f64::consts::TAU).sin()
+                    + 0.15 * (t * base * 3.7 * std::f64::consts::TAU).sin();
                 (s * 20_000.0) as i16
             })
             .collect()
