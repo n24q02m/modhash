@@ -68,7 +68,7 @@ pub(crate) fn convert(frame: &Frame, planes: &[Vec<u8>], adobe: Option<u8>) -> R
         Some(_) => return Err(Error::Unsupported("Adobe transform flag 2 (YCCK)")),
         None => {
             let ids: Vec<u8> = frame.comps.iter().map(|c| c.id).collect();
-            ids == [b'R', b'G', b'B']
+            ids == *b"RGB"
         }
     };
 
