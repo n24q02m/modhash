@@ -40,3 +40,21 @@ for bytes the kit cannot decode further.
 Detection order matters: magics are checked longest-first, UTF-8 text
 wins only when no container matched, and everything left is binary.
 The full rule table is `docs/algorithms/kit.md` §1.
+
+## Divergences vs the Python reference (hashkit 0.5.0)
+
+Documented by the `lab/differential` parity run (72-file corpus):
+
+- **PDF 8-bit encoding, spec-ambiguous**: a `/Type1` base-14 font with no
+  `/Encoding` containing a byte ≥0x80 (e.g. `\\357` = 0xEF in
+  `text_page.pdf`) decodes to **U+FFFD** here — StandardEncoding has no
+  glyph at that code (`font.rs` documents this choice) — while pypdf and
+  Adobe resolve it through WinAnsi/PDFDoc as U+00EF (`ï`). The text layer
+  differs by design pending an explicit fallback decision.
+- **MP3 PCM**: the hand-written decoder is not bit-exact with
+  libmpg123/soundfile — tier-2 peak fingerprints are the comparable axis.
+- **Audio canonical**: tier-1 pins 44.1 kHz mono i32 (`rate ∥ n ∥ pcm`);
+  non-44.1k input is a named `Unsupported`, not a silent resample.
+- **Video tier-2**: fixed 2 fps luma sampling + per-frame pHash differs
+  from a cv2 all-frames pipeline — the decoded Y planes and the pHash
+  math themselves are byte-identical to ffmpeg + the kit oracle.

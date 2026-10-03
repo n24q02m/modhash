@@ -1,0 +1,62 @@
+{
+  "arena_ws": "C:\\Users\\n24q02m-wpc\\projects\\.audit-hashkit-290926\\arena_ws",
+  "arena_is_git_repo": false,
+  "arena_content_sha256": "e4f2b301b7616076e92b094b5d9211db65f2b23c924733a3ba30c0c363e6a01f",
+  "arena_files": [
+    [
+      "__init__.py",
+      "67044407bd3e812b8024a6328340b656e8786440482a389bec4e1667c1973a84"
+    ],
+    [
+      "__main__.py",
+      "c036f388f4002acfebc6b5c8a2e28175962da5e88ce13ebb1f4d1cc678634dd7"
+    ],
+    [
+      "api.py",
+      "b24c8d8adce180a110df1f671098235ea0f0a279e8d4ba93dc5a2d85e1a82536"
+    ],
+    [
+      "calibrate.py",
+      "83bfaef5de67cd0e83bf7380b042c34decccca96d6b872f8b706e1391dcf023e"
+    ],
+    [
+      "canonical.py",
+      "63b532e36f7e381073b5708b52708a6412cd3c4f29aa72e8fc331f8bdca988a5"
+    ],
+    [
+      "core.py",
+      "80a328f921a0e29b3e9130f4780d33ce37a5a3c5d41964dd50b3bff2fba8cd15"
+    ],
+    [
+      "index.py",
+      "c6bd53d28b4a3305fdfd5c17680e873eaa774593e39edc43ca83e32d0a0fb00d"
+    ],
+    [
+      "pdf.py",
+      "7c6bc25c6d047219292eb7e54de52632e94f654e669002dc6df3e461470bfcb1"
+    ],
+    [
+      "sim.py",
+      "e285a021fc99469d46487c50cb22800646f69ed878f4b41a6282cb2acb23ea57"
+    ],
+    [
+      "tier3.py",
+      "f3f4a34dd71a968f236b7603182de4c342b7347010d735e76395a8e02e029fc9"
+    ],
+    [
+      "pyproject.toml",
+      "3a59fe9a1df95dc415be06c25f2b50399b6afac582bb49dd917153405099543d"
+    ],
+    [
+      "uv.lock",
+      "0f9b0db9cf3a611118bebaf88851e6a6ae09c971253914fd357064dc2e95adc8"
+    ],
+    [
+      ".python-version",
+      "a876e0b10411037a012498b9fe18d9bc1df32ed8b722a13564dc944ddcfd9135"
+    ]
+  ],
+  "versions": {
+    "run_at_utc": "2026-10-03T02:03:18.128349+00:00"
+  }
+}

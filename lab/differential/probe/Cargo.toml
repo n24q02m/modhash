@@ -1,0 +1,36 @@
+[package]
+name = "diff-probe"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Lab-only probe for the differential lane: dumps the intermediate
+# values the public `modhash` facade computes but does not print
+# (decoded RGB planes, PCM, canonical text, CDC bounds, frame pHashes,
+# PDF text, zip member digests) so the Python side can be compared
+# against the *decoded content*, not just the final signature.
+#
+# Nested `[workspace]` keeps this out of the kit's workspace members —
+# the zero-dep gate's `cargo metadata` never sees it, and it must NOT
+# be added to the root members list.
+
+[workspace]
+
+[dependencies]
+modhash = { path = "../../../modhash" }
+modhash-bmp = { path = "../../../modhash-bmp" }
+modhash-fastcdc = { path = "../../../modhash-fastcdc" }
+modhash-flac = { path = "../../../modhash-flac" }
+modhash-h264 = { path = "../../../modhash-h264" }
+modhash-jpeg = { path = "../../../modhash-jpeg" }
+modhash-mp3 = { path = "../../../modhash-mp3" }
+modhash-mp4 = { path = "../../../modhash-mp4" }
+modhash-pdf = { path = "../../../modhash-pdf" }
+modhash-png = { path = "../../../modhash-png" }
+modhash-primitives = { path = "../../../modhash-primitives" }
+modhash-raster = { path = "../../../modhash-raster" }
+modhash-text = { path = "../../../modhash-text" }
+modhash-tier3 = { path = "../../../modhash-tier3" }
+modhash-video = { path = "../../../modhash-video" }
+modhash-wav = { path = "../../../modhash-wav" }
+modhash-zip = { path = "../../../modhash-zip" }

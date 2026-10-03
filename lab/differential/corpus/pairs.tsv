@@ -1,0 +1,24 @@
+a	b	note
+img/base_444.png	img/base_444.jpg	same-pixels png/jpg
+img/p24_top_down.bmp	img/p24_bottom_up.bmp	same? bmp orientation
+audio/tone.wav	audio/tone.flac	same pcm two containers
+audio/l3_short.mp3	audio/l3_mono.mp3	related? mp3 variants
+audio/stereo_441.wav	audio/stereo_441.wav	self audio
+video/a_64x48.mp4	video/a_64x48.mov	same stream mp4/mov
+video/a_64x48.mp4	video/a_128x96.mp4	same content 2x scale
+video/a_64x48.mp4	video/a_crf40.mp4	reencode crf40
+video/a_64x48.mp4	video/b_64x48.mp4	different content
+bin/pack_stored.zip	bin/pack_deflated.zip	same members diff method
+bin/f_a.bin	bin/f_copy.bin	identical
+bin/f_a.bin	bin/f_mod.bin	1-byte insert
+bin/f_a.bin	bin/f_tail.bin	10% tail cut
+bin/f_a.bin	bin/f_other.bin	unrelated
+text/doc_a.txt	text/doc_a_edit.txt	1-phrase edit
+text/doc_a.txt	text/doc_b.txt	unrelated text
+text/vi_nfc.txt	text/vi_nfd.txt	nfc/nfd same text
+text/text_page.pdf	text/standard_default.pdf	same pdf two files
+real/img_a.png	real/img_b.jpg	real same-content png/jpg
+real/img_a.png	real/img_other.png	real different images
+real/audio_a.wav	real/audio_a_quiet.wav	real quiet variant
+real/text_a.txt	real/text_a_edit.txt	real text edit
+real/text_a.txt	real/text_b.txt	real different text
