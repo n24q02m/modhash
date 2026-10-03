@@ -10,10 +10,9 @@ readme = "README.md"
 categories = ["algorithms", "cryptography"]
 
 [dependencies]
-modhash-math = { path = "../modhash-math", version = "0.1.0" }
-modhash-wav = { path = "../modhash-wav", version = "0.1.0" }
-modhash-flac = { path = "../modhash-flac", version = "0.1.0" }
-
+modhash-math.workspace = true
+modhash-wav.workspace = true
+modhash-flac.workspace = true
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "deny"

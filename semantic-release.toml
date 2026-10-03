@@ -1,0 +1,41 @@
+# Release version stamping for the modhash Cargo workspace (bsr = drop-in PSR fork).
+# One workspace version: every crate inherits `version.workspace = true`, and every
+# inter-crate dependency resolves through [workspace.dependencies] with an explicit
+# `version` requirement. All 23 keys below are stamped in one pass so a release
+# cannot produce a workspace whose dependency requirements disagree with the
+# version being published (cargo publish rejects path-only or mismatched deps).
+[semantic_release]
+version_toml = [
+    "Cargo.toml:workspace.package.version",
+    "Cargo.toml:workspace.dependencies.modhash.version",
+    "Cargo.toml:workspace.dependencies.modhash-audio.version",
+    "Cargo.toml:workspace.dependencies.modhash-bmp.version",
+    "Cargo.toml:workspace.dependencies.modhash-fastcdc.version",
+    "Cargo.toml:workspace.dependencies.modhash-flac.version",
+    "Cargo.toml:workspace.dependencies.modhash-h264.version",
+    "Cargo.toml:workspace.dependencies.modhash-index.version",
+    "Cargo.toml:workspace.dependencies.modhash-inflate.version",
+    "Cargo.toml:workspace.dependencies.modhash-jpeg.version",
+    "Cargo.toml:workspace.dependencies.modhash-math.version",
+    "Cargo.toml:workspace.dependencies.modhash-mp3.version",
+    "Cargo.toml:workspace.dependencies.modhash-mp4.version",
+    "Cargo.toml:workspace.dependencies.modhash-pdf.version",
+    "Cargo.toml:workspace.dependencies.modhash-png.version",
+    "Cargo.toml:workspace.dependencies.modhash-primitives.version",
+    "Cargo.toml:workspace.dependencies.modhash-raster.version",
+    "Cargo.toml:workspace.dependencies.modhash-text.version",
+    "Cargo.toml:workspace.dependencies.modhash-tier3.version",
+    "Cargo.toml:workspace.dependencies.modhash-unicode.version",
+    "Cargo.toml:workspace.dependencies.modhash-video.version",
+    "Cargo.toml:workspace.dependencies.modhash-wav.version",
+    "Cargo.toml:workspace.dependencies.modhash-zip.version",
+]
+tag_format = "v{version}"
+commit_message = "chore(release): v{version}"
+major_on_zero = false
+
+[semantic_release.changelog]
+changelog_file = "CHANGELOG.md"
+
+[semantic_release.remote]
+type = "github"

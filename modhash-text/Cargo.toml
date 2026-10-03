@@ -10,9 +10,8 @@ readme = "README.md"
 categories = ["algorithms", "cryptography"]
 
 [dependencies]
-modhash-primitives = { path = "../modhash-primitives" }
-modhash-unicode = { path = "../modhash-unicode", version = "0.1.0" }
-
+modhash-primitives.workspace = true
+modhash-unicode.workspace = true
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "deny"

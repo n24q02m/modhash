@@ -10,28 +10,27 @@ readme = "README.md"
 categories = ["algorithms", "cryptography"]
 
 [dependencies]
-modhash-primitives = { path = "../modhash-primitives", version = "0.1.0" }
-modhash-inflate = { path = "../modhash-inflate", version = "0.1.0" }
-modhash-unicode = { path = "../modhash-unicode", version = "0.1.0" }
-modhash-math = { path = "../modhash-math", version = "0.1.0" }
-modhash-raster = { path = "../modhash-raster", version = "0.1.0" }
-modhash-png = { path = "../modhash-png", version = "0.1.0" }
-modhash-bmp = { path = "../modhash-bmp", version = "0.1.0" }
-modhash-jpeg = { path = "../modhash-jpeg", version = "0.1.0" }
-modhash-text = { path = "../modhash-text", version = "0.1.0" }
-modhash-fastcdc = { path = "../modhash-fastcdc", version = "0.1.0" }
-modhash-wav = { path = "../modhash-wav", version = "0.1.0" }
-modhash-flac = { path = "../modhash-flac", version = "0.1.0" }
-modhash-mp3 = { path = "../modhash-mp3", version = "0.1.0" }
-modhash-audio = { path = "../modhash-audio", version = "0.1.0" }
-modhash-mp4 = { path = "../modhash-mp4", version = "0.1.0" }
-modhash-h264 = { path = "../modhash-h264", version = "0.1.0" }
-modhash-video = { path = "../modhash-video", version = "0.1.0" }
-modhash-zip = { path = "../modhash-zip", version = "0.1.0" }
-modhash-pdf = { path = "../modhash-pdf", version = "0.1.0" }
-modhash-tier3 = { path = "../modhash-tier3", version = "0.1.0" }
-modhash-index = { path = "../modhash-index", version = "0.1.0" }
-
+modhash-primitives.workspace = true
+modhash-inflate.workspace = true
+modhash-unicode.workspace = true
+modhash-math.workspace = true
+modhash-raster.workspace = true
+modhash-png.workspace = true
+modhash-bmp.workspace = true
+modhash-jpeg.workspace = true
+modhash-text.workspace = true
+modhash-fastcdc.workspace = true
+modhash-wav.workspace = true
+modhash-flac.workspace = true
+modhash-mp3.workspace = true
+modhash-audio.workspace = true
+modhash-mp4.workspace = true
+modhash-h264.workspace = true
+modhash-video.workspace = true
+modhash-zip.workspace = true
+modhash-pdf.workspace = true
+modhash-tier3.workspace = true
+modhash-index.workspace = true
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "deny"

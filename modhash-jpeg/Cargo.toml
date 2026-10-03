@@ -10,10 +10,9 @@ readme = "README.md"
 categories = ["algorithms", "cryptography"]
 
 [dependencies]
-modhash-math = { path = "../modhash-math", version = "0.1.0" }
-modhash-primitives = { path = "../modhash-primitives", version = "0.1.0" }
-modhash-raster = { path = "../modhash-raster", version = "0.1.0" }
-
+modhash-math.workspace = true
+modhash-primitives.workspace = true
+modhash-raster.workspace = true
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "deny"

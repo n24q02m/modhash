@@ -1,0 +1,192 @@
+name: CD
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: "Release type"
+        required: true
+        type: choice
+        options:
+          - beta
+          - stable
+      publish_existing_tag:
+        description: "Recovery only: publish an already-created tag (e.g. v1.0.0), skipping semantic-release. Use when a partial release left tag + GitHub Release but crates.io publish failed."
+        required: false
+        type: string
+        default: ""
+
+env:
+# Release lane: dispatch-only (release_type=beta|stable); push never releases.
+  RELEASE_TYPE: ${{ inputs.release_type }}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # =================== Release ===================
+  release:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.release.outputs.released }}
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      is_prerelease: ${{ steps.release.outputs.is_prerelease }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.CI_APP_ID }}
+          private-key: ${{ secrets.CI_APP_KEY }}
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+
+      # Dry-run bsr (no_operation_mode => --noop: no commit/tag/push/release) purely to
+      # learn the version it WOULD publish, so the crates.io-collision guard below can
+      # fire BEFORE the real run creates a git tag or GitHub Release. Same action + SHA
+      # and same prerelease inputs as the real step, run against the same untouched
+      # checkout, so the computed version is identical.
+      - uses: n24q02m/better-semantic-release@c102741e544c9733760b09d59144f799c51cff8a # v1.7.3
+        id: dryrun
+        if: inputs.publish_existing_tag == ''
+        with:
+          github_token: ${{ steps.app-token.outputs.token }}
+          config_file: semantic-release.toml
+          prerelease: ${{ env.RELEASE_TYPE == 'beta' }}
+          prerelease_token: beta
+          no_operation_mode: true
+
+      # bsr silently no-ops when it can't find a fix:/feat: commit since the last
+      # tag. released=false alone is not an error (normal for chore/docs-only
+      # windows), so this only warns.
+      - name: Warn if commits exist since last tag but bsr computed no release
+        if: inputs.publish_existing_tag == '' && steps.dryrun.outputs.released != 'true'
+        run: |
+          set -uo pipefail
+          highest_tag="$(git tag -l 'v*' | sort -V | tail -1)"
+          if [ -z "$highest_tag" ]; then
+            echo "No existing tags -- nothing to compare."
+            exit 0
+          fi
+          commit_count="$(git rev-list "${highest_tag}..HEAD" --count)"
+          if [ "$commit_count" -gt 0 ]; then
+            echo "::warning::bsr computed no release (released=false) but ${commit_count} commit(s) exist since ${highest_tag}. Expected if they are all chore/docs-only; otherwise inspect 'git log ${highest_tag}..HEAD --oneline'."
+          else
+            echo "OK: no commits since ${highest_tag} -- released=false is expected."
+          fi
+
+      # crates.io never allows reusing a version number (yank does not free it).
+      # Fail early and loudly if the version bsr intends to publish already exists
+      # on ANY of the 23 crates, before any tag or Release is created -- this turns
+      # a silent release freeze or an opaque publish failure deep in `cargo
+      # publish` into one explicit, actionable error.
+      - name: Guard against re-publishing an already-published crates.io version
+        if: steps.dryrun.outputs.released == 'true'
+        env:
+          COMPUTED_VERSION: ${{ steps.dryrun.outputs.version }}
+        run: |
+          set -uo pipefail
+          CRATES="modhash-primitives modhash-inflate modhash-unicode modhash-math
+          modhash-raster modhash-png modhash-bmp modhash-jpeg modhash-text
+          modhash-fastcdc modhash-wav modhash-flac modhash-mp3 modhash-audio
+          modhash-mp4 modhash-h264 modhash-video modhash-zip modhash-pdf
+          modhash-tier3 modhash-index modhash modhash-cli"
+          echo "Checking crates.io for version ${COMPUTED_VERSION} across 23 crates..."
+          collision=0; free=0
+          for name in ${CRATES}; do
+            http_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 \
+              -H 'User-Agent: modhash-release-guard' \
+              "https://crates.io/api/v1/crates/${name}/${COMPUTED_VERSION}")
+            case "$http_code" in
+              200)
+                echo "::error::${name}@${COMPUTED_VERSION} already exists on crates.io. crates.io NEVER allows re-publishing a version number, even one later yanked. This means git history diverged from the registry. Do NOT retry the same version: bump PAST it and dispatch again."
+                collision=$((collision+1)) ;;
+              404)
+                echo "OK: ${name}@${COMPUTED_VERSION} is free (404)."
+                free=$((free+1)) ;;
+              *)
+                echo "::error::Could not verify ${name}@${COMPUTED_VERSION}: unexpected HTTP ${http_code} (transient registry error, rate limit, or outage). Refusing to proceed so a genuine collision cannot slip through as a false 'free'."
+                exit 1 ;;
+            esac
+            sleep 1
+          done
+          if [ "$collision" -gt 0 ]; then
+            echo "::error::${collision} crate(s) already carry ${COMPUTED_VERSION} on crates.io; ${free} free. Aborting before tag creation."
+            exit 1
+          fi
+          echo "All 23 crates free at ${COMPUTED_VERSION}."
+
+      - uses: n24q02m/better-semantic-release@c102741e544c9733760b09d59144f799c51cff8a # v1.7.3
+        id: release
+        if: inputs.publish_existing_tag == ''
+        with:
+          github_token: ${{ steps.app-token.outputs.token }}
+          config_file: semantic-release.toml
+          prerelease: ${{ env.RELEASE_TYPE == 'beta' }}
+          prerelease_token: beta
+
+      - uses: python-semantic-release/publish-action@6d89e2de8d40ecb3717316ecbbf15a6fa8ea9039 # v10.6.2
+        if: inputs.publish_existing_tag == '' && steps.release.outputs.released == 'true'
+        with:
+          github_token: ${{ steps.app-token.outputs.token }}
+          tag: ${{ steps.release.outputs.tag }}
+
+      - name: Use existing tag (immutable-release recovery)
+        id: forced
+        if: inputs.publish_existing_tag != ''
+        run: |
+          TAG="${{ inputs.publish_existing_tag }}"
+          VERSION="${TAG#v}"
+          {
+            echo "released=true"
+            echo "tag=$TAG"
+            echo "version=$VERSION"
+            echo "is_prerelease=false"
+          } >> "$GITHUB_OUTPUT"
+
+  # =================== Publish to crates.io ===================
+  publish-crates:
+    name: Publish to crates.io
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      # scripts/publish.sh walks the 23 crates leaf-to-root (spec §3 order), probes
+      # the registry first, skips crates already published (resume after partial
+      # failure), and stops on the FIRST failure: a half-published dependency chain
+      # is worse than shipping nothing. cargo reads CARGO_REGISTRY_TOKEN itself.
+      # Trusted publishing (GitHub OIDC) is NOT usable for the first publish of new
+      # crate names (trusted-publisher config requires the crate to already exist),
+      # so the token is the bootstrap credential; per-crate OIDC configs can be
+      # added later by the owner on crates.io.
+      - name: Publish 23 crates leaf-to-root
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_TOKEN }}
+        run: bash scripts/publish.sh

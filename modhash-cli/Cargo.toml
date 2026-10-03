@@ -10,8 +10,7 @@ readme = "README.md"
 categories = ["algorithms", "cryptography"]
 
 [dependencies]
-modhash = { path = "../modhash", version = "0.1.0" }
-
+modhash.workspace = true
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "deny"

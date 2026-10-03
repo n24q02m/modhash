@@ -30,13 +30,35 @@ probe_registry() {
     "https://crates.io/api/v1/crates/$1"
 }
 
+# The workspace version: every crate inherits `version.workspace = true`, so the
+# number lives only in the root [workspace.package] table.
+version=$(sed -n '/^\[workspace\.package\]/,/^\[/{s/^version = "\(.*\)"$/\1/p;}' Cargo.toml | head -1)
+if [[ -z "$version" ]]; then
+  echo "FATAL: no version found in root [workspace.package] - cannot determine release version" >&2
+  exit 1
+fi
+
+probe_registry() {
+  # Version-scoped probe: 404 => this exact crate@version is not on crates.io
+  # (safe to publish); 200 => already published (skip). Probing by name alone
+  # would skip every crate on the SECOND release, because the name exists at an
+  # older version.
+  curl -sS -o /dev/null -w '%{http_code}' \
+    -H 'User-Agent: modhash-publish' \
+    "https://crates.io/api/v1/crates/$1/$version"
+}
+
 for crate in "${ORDER[@]}"; do
-  version=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$crate/Cargo.toml" | head -1)
   status=$(probe_registry "$crate")
 
   if [[ "$status" == "200" ]]; then
-    echo "SKIP  $crate $version (name already on crates.io)"
+    echo "SKIP  $crate $version (already published at this version)"
     continue
+  fi
+
+  if [[ "$status" != "404" ]]; then
+    echo "FATAL: registry returned HTTP $status for $crate $version - cannot distinguish 'free' from a transient error; refusing to publish (a real collision must never be mistaken for a false free)" >&2
+    exit 1
   fi
 
   if [[ "$DRY_RUN" == "1" ]]; then
