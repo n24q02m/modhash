@@ -70,6 +70,7 @@ pub(crate) fn parse(payload: &[u8]) -> Result<Pps> {
         return Err(Error::BadValue("pps references sps id over 31"));
     }
     let cabac = b.bit()?;
+    crate::dbgln!("PPS parse: cabac={} deblock={}", cabac, 0);
     let bottom_field_pic_order = b.bit()?;
     let num_slice_groups = b.ue()? + 1;
     if num_slice_groups > 1 {
@@ -122,6 +123,7 @@ pub(crate) fn parse(payload: &[u8]) -> Result<Pps> {
         }
     }
 
+    crate::dbgln!("PPS: cabac={} nr0={} wp={} wbi={} pqp={} dbctrl={} t8={}", cabac, num_ref_idx_l0_active, weighted_pred, weighted_bipred_idc, pic_init_qp, deblocking_control, transform_8x8_mode);
     Ok(Pps {
         id,
         sps_id,

@@ -12,7 +12,28 @@ use crate::slice::SliceHeader;
 use alloc::vec::Vec;
 use modhash_primitives::{Error, Result};
 
-/// One reference picture in the DPB: planes + PicNum bookkeeping.
+/// Colocation data of one macroblock, kept for temporal direct
+/// prediction (spec 8.4.1.2): the colocated picture's L0/L1 motion
+/// vectors and reference indices at 4x4-block granularity.
+#[derive(Clone, Debug)]
+pub(crate) struct ColocMb {
+    /// L0 motion vectors per 4x4 block (group-major).
+    pub mv_l0: [[i16; 2]; 16],
+    /// L1 motion vectors per 4x4 block.
+    pub mv_l1: [[i16; 2]; 16],
+    /// L0 reference index of each 8x8 group's top-left 4x4 block
+    /// (`0xff` = this list unused) — the granularity the direct-
+    /// prediction colocation rules read (reference `ref_index[]`).
+    pub ref_l0: [u8; 4],
+    /// L1 reference indices per 8x8 group.
+    pub ref_l1: [u8; 4],
+    /// `true` when the colocated MB was intra (mv/ref ignored, direct
+    /// prediction falls back to zeros).
+    pub intra: bool,
+}
+
+/// One reference picture in the DPB: planes + PicNum/POC bookkeeping
+/// and the colocation data B-slice direct prediction needs.
 #[derive(Clone, Debug)]
 pub(crate) struct RefFrame {
     /// `frame_num` the picture was coded with.
@@ -20,12 +41,27 @@ pub(crate) struct RefFrame {
     /// `PicNum` of the *current* decode pass: `FrameNum` adjusted by
     /// `FrameNumWrap` (spec 8.2.4.1); recomputed per slice.
     pub pic_num: u32,
+    /// Picture order count (spec 8.2.1): RefPicList1 ordering,
+    /// temporal-direct `DistScaleFactor` and implicit weighted
+    /// prediction all key on POC, not `frame_num`.
+    pub poc: i64,
     /// Luma plane (coded width × coded height, row-major).
     pub y: Vec<u8>,
     /// Cb plane.
     pub cb: Vec<u8>,
     /// Cr plane.
     pub cr: Vec<u8>,
+    /// Colocation data per macroblock (empty for pictures decoded
+    /// before the first B slice appears — temporal direct tolerates
+    /// it via the intra/zero path).
+    pub coloc: Vec<ColocMb>,
+    /// `frame_num`s of this picture's own RefPicList0 at decode time
+    /// — the `map_col_to_list0` indirection temporal direct uses to
+    /// resolve `refIdxCol` (spec 8.2.5.4 note: the colocated picture's
+    /// reference lists are not stored, only their identities).
+    pub ref_l0_fns: Vec<u32>,
+    /// Same for RefPicList1.
+    pub ref_l1_fns: Vec<u32>,
 }
 
 /// The DPB: `refs` is the set of short-term reference frames plus the
@@ -122,13 +158,28 @@ impl Dpb {
 
     /// Inserts the finished frame as a reference (caller skips when
     /// `nal_ref_idc == 0`) and returns its index.
-    pub(crate) fn push(&mut self, frame_num: u32, y: Vec<u8>, cb: Vec<u8>, cr: Vec<u8>) -> usize {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn push(
+        &mut self,
+        frame_num: u32,
+        poc: i64,
+        y: Vec<u8>,
+        cb: Vec<u8>,
+        cr: Vec<u8>,
+        coloc: Vec<ColocMb>,
+        ref_l0_fns: Vec<u32>,
+        ref_l1_fns: Vec<u32>,
+    ) -> usize {
         self.refs.push(RefFrame {
             frame_num,
             pic_num: frame_num,
+            poc,
             y,
             cb,
             cr,
+            coloc,
+            ref_l0_fns,
+            ref_l1_fns,
         });
         self.refs.len() - 1
     }
@@ -137,13 +188,47 @@ impl Dpb {
     /// the slice's reordering commands (spec 8.2.4.2 + 8.2.4.3.1).
     ///
     /// Returns indices into `self.refs` in list order.
-    pub(crate) fn ref_list0(&mut self, h: &SliceHeader, frame_num: u32) -> Result<Vec<usize>> {
+    pub(crate) fn ref_list0(
+        &mut self,
+        h: &SliceHeader,
+        frame_num: u32,
+        cur_poc: i64,
+        is_b: bool,
+    ) -> Result<Vec<usize>> {
         self.set_pic_nums(frame_num);
-        // Initial order: PicNum descending (short-term only).
         let mut order: Vec<usize> = (0..self.refs.len()).collect();
-        order.sort_by(|&a, &b| self.refs[b].pic_num.cmp(&self.refs[a].pic_num));
-        self.apply_reorder(&mut order, &h.reorder_l0, frame_num)?;
+        if is_b {
+            // B slices (spec 8.2.4.2.3): short-term refs with
+            // poc < cur_poc first in *decreasing* POC, then
+            // poc > cur_poc in *increasing* POC.
+            order.sort_by(|&a, &b| {
+                let (pa, pb) = (self.refs[a].poc, self.refs[b].poc);
+                let (ba, bb) = (pa < cur_poc, pb < cur_poc);
+                match (ba, bb) {
+                    (true, true) => pb.cmp(&pa),
+                    (false, false) => pa.cmp(&pb),
+                    (true, false) => core::cmp::Ordering::Less,
+                    (false, true) => core::cmp::Ordering::Greater,
+                }
+            });
+        } else {
+            // Initial order: PicNum descending (short-term only).
+            order.sort_by(|&a, &b| self.refs[b].pic_num.cmp(&self.refs[a].pic_num));
+        }
+        // The reorder machinery works on `num_ref_idx_active` slots —
+        // when the DPB holds fewer pictures the tail slots repeat the
+        // last entry (spec 8.2.4.1's fill rule, as the reference
+        // decoder's `default_ref` does), and a command targeting a
+        // slot index >= cap is malformed.
         let cap = h.num_ref_idx_l0_active as usize;
+        if cap == 0 {
+            return Err(Error::BadValue("num_ref_idx_l0_active zero"));
+        }
+        while order.len() < cap {
+            let last = *order.last().unwrap_or(&0);
+            order.push(last);
+        }
+        self.apply_reorder(&mut order, &h.reorder_l0, frame_num, cap)?;
         if order.len() > cap {
             order.truncate(cap);
         }
@@ -151,16 +236,48 @@ impl Dpb {
     }
 
     /// Builds the initial RefPicList1 for a B slice (spec 8.2.4.2.3):
-    /// short-term frames in *increasing* PicNum order, then the L1
-    /// reordering commands. Long-term refs are refused elsewhere.
-    pub(crate) fn ref_list1(&mut self, h: &SliceHeader, frame_num: u32) -> Result<Vec<usize>> {
+    /// refs with poc > cur_poc first in increasing POC, then
+    /// poc <= cur_poc in decreasing POC — the mirror image of L0 —
+    /// followed by the L1 reordering commands and the mandated
+    /// "if entry 0 equals L0[0], swap entries 0 and 1" rule.
+    pub(crate) fn ref_list1(
+        &mut self,
+        h: &SliceHeader,
+        frame_num: u32,
+        cur_poc: i64,
+        l0: &[usize],
+    ) -> Result<Vec<usize>> {
         self.set_pic_nums(frame_num);
         let mut order: Vec<usize> = (0..self.refs.len()).collect();
-        order.sort_by(|&a, &b| self.refs[a].pic_num.cmp(&self.refs[b].pic_num));
-        self.apply_reorder(&mut order, &h.reorder_l1, frame_num)?;
+        order.sort_by(|&a, &b| {
+            let (pa, pb) = (self.refs[a].poc, self.refs[b].poc);
+            // After-cur first (ascending), then before-or-equal
+            // (descending).
+            let (aa, ab) = (pa > cur_poc, pb > cur_poc);
+            match (aa, ab) {
+                (true, true) => pa.cmp(&pb),
+                (false, false) => pb.cmp(&pa),
+                (true, false) => core::cmp::Ordering::Less,
+                (false, true) => core::cmp::Ordering::Greater,
+            }
+        });
         let cap = h.num_ref_idx_l1_active as usize;
+        if cap == 0 {
+            return Err(Error::BadValue("num_ref_idx_l1_active zero"));
+        }
+        while order.len() < cap {
+            let last = *order.last().unwrap_or(&0);
+            order.push(last);
+        }
+        self.apply_reorder(&mut order, &h.reorder_l1, frame_num, cap)?;
         if order.len() > cap {
             order.truncate(cap);
+        }
+        // Spec 8.2.4.2.3: when RefPicList1[0] == RefPicList0[0] and
+        // both lists have entries, swap the first two L1 entries so
+        // a same-picture pair does not stall direct prediction.
+        if order.len() > 1 && !l0.is_empty() && order[0] == l0[0] {
+            order.swap(0, 1);
         }
         Ok(order)
     }
@@ -174,6 +291,7 @@ impl Dpb {
         order: &mut Vec<usize>,
         cmds: &[(u32, u32)],
         frame_num: u32,
+        cap: usize,
     ) -> Result<()> {
         if cmds.is_empty() {
             return Ok(());
@@ -195,7 +313,7 @@ impl Dpb {
                     .iter()
                     .position(|&i| self.refs[i].pic_num == want)
                     .ok_or(Error::BadValue("ref reorder target not in list"))?;
-                if idx >= n.max(1) {
+                if idx >= cap {
                     return Err(Error::BadValue("ref reorder index out of range"));
                 }
                 let r = list.remove(pos);

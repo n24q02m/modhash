@@ -156,12 +156,45 @@ fn garbage_is_error_not_panic() {
 /// High-profile streams are refused with an explicit profile name.
 #[test]
 fn high_profile_named_unsupported() {
-    // Hand-built minimal SPS: profile_idc 100. (00 00 00 01 67 64 00 ...)
+    // Hand-built minimal SPS: profile_idc 110 (High 10) — P13 decodes
+    // the 8-bit 4:2:0 High feature set, so the named-refusal check
+    // uses a profile whose bit depth stays out of scope.
     let sps = [
-        0x00, 0x00, 0x00, 0x01, 0x67, 0x64, 0x00, 0x0a, 0xf8, 0x88, 0x80,
+        0x00, 0x00, 0x00, 0x01, 0x67, 0x6e, 0x00, 0x0a, 0xf8, 0x88, 0x80,
     ];
     match decode(&sps) {
         Err(Error::Unsupported(m)) => assert!(m.contains("High"), "message: {m}"),
         other => panic!("expected Unsupported, got {other:?}"),
     }
+}
+
+// ---- P13 Main-profile conformance (B slices, CABAC, 8x8, weighted) ----
+
+#[test]
+fn conformance_b_slices() {
+    // B-slice streams: CABAC + direct modes + B-pyramid + multi-ref.
+    assert_pixels("m1_b3_64x64", 64, 64, 10);
+    assert_pixels("m2_b2_refs_64x64", 64, 64, 12);
+    assert_pixels("m3_b4_strat_64x48", 64, 48, 12);
+    assert_pixels("m4_direct_temp_32x32", 32, 32, 8);
+    assert_pixels("m5_direct_spat_32x32", 32, 32, 8);
+    assert_pixels("m6_bpyr_64x64", 64, 64, 12);
+}
+
+#[test]
+fn conformance_8x8_transform() {
+    // High-profile streams restricted to the 8x8-transform feature:
+    // inter 8x8 + I_8x8 intra prediction.
+    assert_pixels("t1_8x8_64x64", 64, 64, 12);
+    assert_pixels("t2_8x8_part_64x64", 64, 64, 10);
+    assert_pixels("t3_i8x8_64x48", 64, 48, 12);
+    assert_pixels("t4_8x8_umh_64x64", 64, 64, 12);
+}
+
+#[test]
+fn conformance_weighted_pred() {
+    // Explicit P-slice weighting + implicit/explicit B weighting.
+    assert_pixels("w1_wp_exp_64x64", 64, 64, 10);
+    assert_pixels("w2_wp_simple_64x64", 64, 64, 12);
+    assert_pixels("w3_wp_b_32x32", 32, 32, 8);
 }
