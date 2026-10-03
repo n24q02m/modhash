@@ -5,19 +5,22 @@ use modhash_primitives::{Error, Result};
 
 /// The `profile_idc` values this crate understands, named for error
 /// reporting. Every profile outside [`Profile::Baseline`],
-/// [`Profile::Main`] and [`Profile::Extended`] is refused with the
-/// profile named — P12 decodes the baseline CAVLC feature set only.
+/// [`Profile::Main`], [`Profile::Extended`] and [`Profile::High`] is
+/// refused with the profile named — the decoder covers the 8-bit 4:2:0
+/// Main profile feature set plus the 8x8 transform.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Profile {
     /// `profile_idc` 66 (Baseline and Constrained Baseline — the
     /// constraint flags are checked separately).
     Baseline,
-    /// `profile_idc` 77 (Main). Decoded so long as the stream only
-    /// exercises the CAVLC + I/P-slice subset; CABAC and B-slices
-    /// still error when encountered.
+    /// `profile_idc` 77 (Main): CAVLC + CABAC, I/P/B slices.
     Main,
     /// `profile_idc` 88 (Extended). Same subset as Main for decoding.
     Extended,
+    /// `profile_idc` 100 (High): the Main set plus the 8x8 luma
+    /// transform. Scaling matrices, non-4:2:0 chroma and other bit
+    /// depths are refused at SPS parse.
+    High,
 }
 
 /// Human-readable name of a `profile_idc`, including profiles this
@@ -107,12 +110,12 @@ pub(crate) fn parse(payload: &[u8]) -> Result<Sps> {
         66 => Profile::Baseline,
         77 => Profile::Main,
         88 => Profile::Extended,
+        100 => Profile::High,
         other => {
             let name = profile_name(u32::from(other));
             // Leak-free: the error carries a &'static str, so map the
             // profile name back through the table's static strings.
             return Err(Error::Unsupported(match name {
-                "High" => "h264 profile: High",
                 "High 10" => "h264 profile: High 10",
                 "High 4:2:2" => "h264 profile: High 4:2:2",
                 "High 4:4:4" => "h264 profile: High 4:4:4",
@@ -128,8 +131,33 @@ pub(crate) fn parse(payload: &[u8]) -> Result<Sps> {
     // Constrained baseline is baseline syntax: constraint_set1_flag set
     // simply guarantees that. No action needed beyond the flag parse.
 
-    // High-family profiles carry extra SPS fields; they are refused by
-    // the match above, so chroma_format_idc stays implicitly 1 (4:2:0).
+    // High-profile SPS extension (spec 7.3.2.1.1): chroma format, bit
+    // depths, qpprime bypass and the scaling-matrix flag. Only 8-bit
+    // 4:2:0 with flat scaling is in scope — everything else is a named
+    // refusal, not a silent skip.
+    if profile == Profile::High {
+        let chroma_format_idc = b.ue()?;
+        if chroma_format_idc != 1 {
+            return Err(Error::Unsupported("h264 chroma_format_idc != 1 (4:2:2/4:4:4)"));
+        }
+        if chroma_format_idc == 3 {
+            let _separate_colour_plane = b.bit()?;
+        }
+        if b.ue()? != 0 {
+            return Err(Error::Unsupported("h264 bit_depth_luma > 8"));
+        }
+        if b.ue()? != 0 {
+            return Err(Error::Unsupported("h264 bit_depth_chroma > 8"));
+        }
+        if b.bit()? {
+            return Err(Error::Unsupported("h264 qpprime_y_zero_transform_bypass"));
+        }
+        if b.bit()? {
+            return Err(Error::Unsupported("h264 seq_scaling_matrix"));
+        }
+    }
+
+    // Non-High profiles have chroma_format_idc implicitly 1 (4:2:0).
     let log2_max_frame_num = b.ue()? + 4;
     if !(4..=16).contains(&log2_max_frame_num) {
         return Err(Error::BadValue("log2_max_frame_num out of range"));

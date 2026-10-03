@@ -105,8 +105,10 @@ struct SliceCx<'a> {
     sps: &'a Sps,
     pps: &'a Pps,
     h: &'a SliceHeader,
-    /// Resolved reference list: indices into `dpb.refs` in list order.
+    /// Resolved reference list 0: indices into `dpb.refs` in list order.
     ref_order: &'a [usize],
+    /// Resolved reference list 1 (B slices only).
+    ref_order1: &'a [usize],
     /// `QPy` — updated by `mb_qp_delta`; skip MBs keep it untouched
     /// (spec 7.4.5: `QPy` carries through `mb_skip_run`).
     qp_prev: i32,
@@ -169,9 +171,6 @@ impl Decoder {
                 let sps = self.sps.as_ref().unwrap();
                 if p.sps_id != sps.id {
                     return Err(Error::BadValue("PPS references unknown SPS"));
-                }
-                if p.cabac {
-                    return Err(Error::Unsupported("h264 CABAC"));
                 }
                 self.pps = Some(p);
             }
@@ -256,10 +255,19 @@ impl Decoder {
                 p.marking = (h.adaptive_marking, h.idr_marking, h.mmco.clone());
             }
         }
-        let ref_order: Vec<usize> = if h.slice_type == SliceType::P {
+        let ref_order: Vec<usize> = if h.slice_type != SliceType::I {
             let order = self.dpb.ref_list0(&h, h.frame_num)?;
             if order.is_empty() {
-                return Err(Error::BadValue("P slice with empty ref list"));
+                return Err(Error::BadValue("P/B slice with empty L0 list"));
+            }
+            order
+        } else {
+            Vec::new()
+        };
+        let ref_order1: Vec<usize> = if h.slice_type == SliceType::B {
+            let order = self.dpb.ref_list1(&h, h.frame_num)?;
+            if order.is_empty() {
+                return Err(Error::BadValue("B slice with empty L1 list"));
             }
             order
         } else {
@@ -270,6 +278,7 @@ impl Decoder {
             pps: &pps,
             h: &h,
             ref_order: &ref_order,
+            ref_order1: &ref_order1,
             qp_prev: pps.pic_init_qp + h.slice_qp_delta,
             slice_id,
         };
@@ -321,9 +330,14 @@ impl Decoder {
                 delta_poc1: 0,
                 num_ref_override: false,
                 num_ref_idx_l0_active: 1,
+                num_ref_idx_l1_active: 1,
                 reorder_l0: Vec::new(),
+                reorder_l1: Vec::new(),
                 wp_l0: None,
+                wp_l1: None,
                 wp_denom: (0, 0),
+                direct_spatial: false,
+                cabac_init_idc: 0,
                 idr_marking: pic.marking.1,
                 adaptive_marking: pic.marking.0,
                 mmco: pic.marking.2.clone(),
@@ -419,6 +433,19 @@ fn slice_data(pic: &mut Pic, br: &mut Br<'_>, cx: &mut SliceCx<'_>, dpb: &Dpb) -
                 break;
             }
         }
+        if cx.h.slice_type == SliceType::B {
+            let run = br.ue()?;
+            for _ in 0..run {
+                if mb_idx >= total {
+                    return Err(Error::BadValue("mb_skip_run past picture"));
+                }
+                b_skip(pic, cx, dpb, mb_idx, wm)?;
+                mb_idx += 1;
+            }
+            if mb_idx >= total || br.no_more_rbsp_data() {
+                break;
+            }
+        }
         mb_decode(pic, br, cx, dpb, mb_idx, wm)?;
         mb_idx += 1;
         if mb_idx >= total || br.no_more_rbsp_data() {
@@ -485,6 +512,31 @@ fn p_skip(pic: &mut Pic, cx: &SliceCx<'_>, dpb: &Dpb, idx: usize, wm: usize) -> 
         [i32::from(mvp[0]), i32::from(mvp[1])],
         0,
     )?;
+    Ok(())
+}
+
+/// B_Skip / B_Direct_16x16 reconstruction: temporal or spatial direct
+/// prediction per 8x8 region, no residual, no coded motion.
+fn b_skip(pic: &mut Pic, cx: &SliceCx<'_>, dpb: &Dpb, idx: usize, wm: usize) -> Result<()> {
+    let map = MbMap {
+        idx,
+        x: idx % wm,
+        y: idx / wm,
+        width: wm,
+        sid: cx.slice_id,
+    };
+    {
+        let m = &mut pic.mbs[idx];
+        m.mb_type = MbType::BSkip;
+        m.slice_id = cx.slice_id;
+        m.dbg_idx = idx as u32;
+        m.qp_y = cx.qp_prev.clamp(0, 51) as u8;
+        m.disable_deblock_idc = cx.h.disable_deblock_idc;
+        m.filter_offset_a = cx.h.offset_a;
+        m.filter_offset_b = cx.h.offset_b;
+        m.nz = [0; 24];
+    }
+    direct_motion(pic, cx, dpb, idx, wm)?;
     Ok(())
 }
 

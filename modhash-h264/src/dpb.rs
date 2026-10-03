@@ -133,58 +133,80 @@ impl Dpb {
         self.refs.len() - 1
     }
 
-    /// Builds the initial RefPicList0 for a P slice and applies the
-    /// slice's reordering commands (spec 8.2.4.2 + 8.2.4.3.1).
+    /// Builds the initial RefPicList0 for a P or B slice and applies
+    /// the slice's reordering commands (spec 8.2.4.2 + 8.2.4.3.1).
     ///
     /// Returns indices into `self.refs` in list order.
     pub(crate) fn ref_list0(&mut self, h: &SliceHeader, frame_num: u32) -> Result<Vec<usize>> {
         self.set_pic_nums(frame_num);
-        // Initial order: PicNum descending.
+        // Initial order: PicNum descending (short-term only).
         let mut order: Vec<usize> = (0..self.refs.len()).collect();
         order.sort_by(|&a, &b| self.refs[b].pic_num.cmp(&self.refs[a].pic_num));
-        // Apply slice reordering commands (spec 8.2.4.3.1).
-        if !h.reorder_l0.is_empty() {
-            // refIdxL0 walks the list; picNumLXPred starts at the
-            // picture's own PicNum... for frame pictures that's
-            // FrameNum (not wrapped).
-            let n = order.len();
-            let mut list: Vec<usize> = order.clone();
-            let mut pred = i64::from(frame_num); // picNumL0Pred = PicNum of current frame
-            let mut idx: usize = 0;
-            for &(idc, val) in &h.reorder_l0 {
-                if idc == 0 || idc == 1 {
-                    if idc == 0 {
-                        // abs_diff_pic_num_minus1 subtracts.
-                        let v = i64::from(val) + 1;
-                        pred = (pred - v).rem_euclid(i64::from(self.max_frame_num));
-                    } else {
-                        let v = i64::from(val) + 1;
-                        pred = (pred + v).rem_euclid(i64::from(self.max_frame_num));
-                    }
-                    let want = pred as u32;
-                    let pos = list
-                        .iter()
-                        .position(|&i| self.refs[i].pic_num == want)
-                        .ok_or(Error::BadValue("ref reorder target not in list"))?;
-                    if idx >= n.max(1) {
-                        return Err(Error::BadValue("ref reorder index out of range"));
-                    }
-                    let r = list.remove(pos);
-                    let ins = idx.min(list.len());
-                    list.insert(ins, r);
-                    idx += 1;
-                } else {
-                    return Err(Error::Unsupported("h264 L0 long-term reorder (idc 2)"));
-                }
-            }
-            order = list;
-        }
-        // The active list is at most num_ref_idx_l0_active long
-        // (spec 8.2.4.2); extra initial entries are pruned.
+        self.apply_reorder(&mut order, &h.reorder_l0, frame_num)?;
         let cap = h.num_ref_idx_l0_active as usize;
         if order.len() > cap {
             order.truncate(cap);
         }
         Ok(order)
+    }
+
+    /// Builds the initial RefPicList1 for a B slice (spec 8.2.4.2.3):
+    /// short-term frames in *increasing* PicNum order, then the L1
+    /// reordering commands. Long-term refs are refused elsewhere.
+    pub(crate) fn ref_list1(&mut self, h: &SliceHeader, frame_num: u32) -> Result<Vec<usize>> {
+        self.set_pic_nums(frame_num);
+        let mut order: Vec<usize> = (0..self.refs.len()).collect();
+        order.sort_by(|&a, &b| self.refs[a].pic_num.cmp(&self.refs[b].pic_num));
+        self.apply_reorder(&mut order, &h.reorder_l1, frame_num)?;
+        let cap = h.num_ref_idx_l1_active as usize;
+        if order.len() > cap {
+            order.truncate(cap);
+        }
+        Ok(order)
+    }
+
+    /// Reference-picture-list reordering (spec 8.2.4.3.1), shared by
+    /// L0 and L1: `pred` starts at the current picture's PicNum and
+    /// each `abs_diff_pic_num_minus1` command walks it while the
+    /// picked entry is moved to `refIdxLX`.
+    fn apply_reorder(
+        &mut self,
+        order: &mut Vec<usize>,
+        cmds: &[(u32, u32)],
+        frame_num: u32,
+    ) -> Result<()> {
+        if cmds.is_empty() {
+            return Ok(());
+        }
+        let n = order.len();
+        let mut list = order.clone();
+        let mut pred = i64::from(frame_num);
+        let mut idx: usize = 0;
+        for &(idc, val) in cmds {
+            if idc == 0 || idc == 1 {
+                let v = i64::from(val) + 1;
+                pred = if idc == 0 {
+                    (pred - v).rem_euclid(i64::from(self.max_frame_num))
+                } else {
+                    (pred + v).rem_euclid(i64::from(self.max_frame_num))
+                };
+                let want = pred as u32;
+                let pos = list
+                    .iter()
+                    .position(|&i| self.refs[i].pic_num == want)
+                    .ok_or(Error::BadValue("ref reorder target not in list"))?;
+                if idx >= n.max(1) {
+                    return Err(Error::BadValue("ref reorder index out of range"));
+                }
+                let r = list.remove(pos);
+                let ins = idx.min(list.len());
+                list.insert(ins, r);
+                idx += 1;
+            } else {
+                return Err(Error::Unsupported("h264 long-term ref reorder"));
+            }
+        }
+        *order = list;
+        Ok(())
     }
 }
