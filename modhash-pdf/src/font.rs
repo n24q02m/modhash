@@ -99,18 +99,27 @@ pub(crate) fn build<R: Resolve>(
     })
 }
 
-/// The default encoding for a simple font: Symbol/ZapfDingbats use their
-/// own built-ins; the rest of the base-14 and unknown bases use Standard.
+/// The default encoding for a simple font. Symbol and ZapfDingbats use
+/// their own built-ins; Type3 falls through to Standard as the
+/// least-wrong default (its Encoding dict is required anyway).
+///
+/// Every other non-symbolic base-14 or unknown base — Type1, MMType1,
+/// TrueType — resolves through **WinAnsiEncoding**, not StandardEncoding.
+/// The spec leaves the built-in encoding of the standard-14 fonts open
+/// for bytes ≥ 0x80, and every mainstream consumer (Acrobat, pypdf,
+/// MuPDF) reads them as WinAnsi: StandardEncoding marks those codes
+/// `.notdef` and would silently corrupt text like `naïve` → `na<U+FFFD>ve`
+/// (diff-oracle parity finding, 2026-10-03). An explicit `/Encoding` or
+/// `/ToUnicode` still wins — this is only the no-Encoding fallback and
+/// the base for a `/Differences` overlay.
 fn simple_base_table(base: &[u8], subtype: &[u8]) -> [Option<Glyph>; 256] {
     if subtype == b"Type3" {
-        // Type3 requires an Encoding dict; without one we fall through to
-        // Standard as the least-wrong default rather than refuse outright.
         return fill(tables::STANDARD_ENCODING);
     }
     match base {
         b"Symbol" => fill(tables::SYMBOL_ENCODING),
         b"ZapfDingbats" => fill(tables::ZAPFDINGBATS_ENCODING),
-        _ => fill(tables::STANDARD_ENCODING),
+        _ => fill(tables::WINANSI_ENCODING),
     }
 }
 
@@ -340,7 +349,9 @@ impl Font {
     /// Decode one string's bytes to Unicode text for this font.
     ///
     /// Unmappable codes become U+FFFD (documented choice: the byte exists,
-    /// we emit the replacement char rather than guessing or dropping).
+    /// we emit the replacement char rather than guessing or dropping). With
+    /// the WinAnsi fallback on non-symbolic base fonts this is rare —
+    /// mostly Symbol/Zapf codes outside their tables or a corrupt stream.
     pub(crate) fn decode(&self, bytes: &[u8]) -> String {
         let mut out = String::new();
         if self.cid {

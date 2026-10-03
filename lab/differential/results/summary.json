@@ -15,9 +15,8 @@
   "t2_phash_RUST-N/A": 1,
   "decode_vid_SKIP": 1,
   "decode_pdf_RUST-N/A": 1,
-  "decode_pdf_MATCH": 2,
+  "decode_pdf_MATCH": 4,
   "decode_pdf_CLOSE": 1,
-  "decode_pdf_MISMATCH": 2,
   "decode_vid_MATCH": 5,
   "decode_vid_RUST-N/A": 5,
   "ingest_NEITHER": 4
@@ -1334,12 +1333,8 @@
    "ingest_status": "BOTH",
    "tier1": "BY-DESIGN(pdf: rust=text, py=bytes)",
    "decode": {
-    "pdf_text_jaccard": 0.3333,
-    "pdf_text": "MISMATCH",
-    "pdf_text_bytes": {
-     "rust": 10,
-     "py": 9
-    }
+    "pdf_text_jaccard": 1.0,
+    "pdf_text": "MATCH"
    },
    "tier2": {
     "minhash_status": "BY-DESIGN(different perm families)"
@@ -1358,12 +1353,8 @@
    "ingest_status": "BOTH",
    "tier1": "BY-DESIGN(pdf: rust=text, py=bytes)",
    "decode": {
-    "pdf_text_jaccard": 0.3333,
-    "pdf_text": "MISMATCH",
-    "pdf_text_bytes": {
-     "rust": 10,
-     "py": 9
-    }
+    "pdf_text_jaccard": 1.0,
+    "pdf_text": "MATCH"
    },
    "tier2": {
     "minhash_status": "BY-DESIGN(different perm families)"

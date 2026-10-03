@@ -45,14 +45,22 @@ The full rule table is `docs/algorithms/kit.md` §1.
 
 Documented by the `lab/differential` parity run (72-file corpus):
 
-- **PDF 8-bit encoding, spec-ambiguous**: a `/Type1` base-14 font with no
+- **PDF 8-bit encoding**: a non-symbolic `/Type1` base-14 font with no
   `/Encoding` containing a byte ≥0x80 (e.g. `\\357` = 0xEF in
-  `text_page.pdf`) decodes to **U+FFFD** here — StandardEncoding has no
-  glyph at that code (`font.rs` documents this choice) — while pypdf and
-  Adobe resolve it through WinAnsi/PDFDoc as U+00EF (`ï`). The text layer
-  differs by design pending an explicit fallback decision.
-- **MP3 PCM**: the hand-written decoder is not bit-exact with
-  libmpg123/soundfile — tier-2 peak fingerprints are the comparable axis.
+  `text_page.pdf`) decodes through **WinAnsiEncoding** (0xEF → `ï`
+  U+00EF), matching pypdf/Acrobat; only `/Symbol`, `/ZapfDingbats` and
+  `Type3` keep their own tables (ecosystem-aligned choice,
+  diff-oracle 2026-10-03).
+- **MP3 PCM**: decoded output is *near bit-exact* with libmpg123 (via
+  libsndfile) — segment correlation ≥ 0.9999 on all corpus files, median
+  sample ratio 1.0 (sub-LSB rounding in the synthesis filterbank). The
+  two real divergences are (a) *gapless trim*: libsndfile drops the
+  LAME/Xing encoder delay (e.g. `l3_short` 24192 vs 22050 frames) while
+  this decoder emits every coded frame — same waveform, shifted;
+  (b) *polarity*: `l3_48k` (48 kHz MPEG-2) decodes with inverted sign vs
+  libmpg123 (corr −0.9999) — a real sign bug in the 48 kHz path, flagged
+  for the fix lane. Tier-2 peak fingerprints are unaffected — the
+  comparable axis is the spectral-peak set, not raw PCM.
 - **Audio canonical**: tier-1 pins 44.1 kHz mono i32 (`rate ∥ n ∥ pcm`);
   non-44.1k input is a named `Unsupported`, not a silent resample.
 - **Video tier-2**: fixed 2 fps luma sampling + per-frame pHash differs

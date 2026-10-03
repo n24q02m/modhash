@@ -219,8 +219,8 @@ PY-N/A python cannot ingest · RUST-N/A rust refuses (named) · SKIP.
 | text/prose.txt | SKIP |
 | text/punct_tags.txt | SKIP |
 | text/short_two.txt | SKIP |
-| text/standard_default.pdf | pdf_text_jaccard=0.3333 · pdf_text=MISMATCH · pdf_text_bytes={'rust': 10, 'py': 9} |
-| text/text_page.pdf | pdf_text_jaccard=0.3333 · pdf_text=MISMATCH · pdf_text_bytes={'rust': 10, 'py': 9} |
+| text/standard_default.pdf | pdf_text_jaccard=1.0 · pdf_text=MATCH |
+| text/text_page.pdf | pdf_text_jaccard=1.0 · pdf_text=MATCH |
 | text/tounicode_bfrange.pdf | pdf_text_jaccard=1.0 · pdf_text=MATCH |
 | text/vi_nfc.txt | SKIP |
 | text/vi_nfd.txt | SKIP |

@@ -618,8 +618,9 @@ pages = [
         )],
     },
 ]
-# std 0xEF is unmapped (.notdef) -> U+FFFD
-emit("standard_default", build_doc(pages), "na\ufffdve na")
+# non-symbolic Type1 without /Encoding: WinAnsi fallback (ecosystem-
+# aligned; 0xEF is 'ï', not StandardEncoding's .notdef -> U+FFFD)
+emit("standard_default", build_doc(pages), "na\u00efve na")
 
 # 8 ----------------------------------------------------------- differences
 pages = [
