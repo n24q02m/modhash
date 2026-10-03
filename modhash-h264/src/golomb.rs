@@ -14,6 +14,9 @@ use modhash_primitives::{Error, Result};
 /// byte 0.
 #[derive(Debug)]
 pub(crate) struct Br<'a> {
+    #[cfg(test)]
+    pub(crate) data: &'a [u8],
+    #[cfg(not(test))]
     data: &'a [u8],
     /// Index of the next bit to read, counting from the MSB of byte 0.
     pos: usize,
@@ -23,6 +26,13 @@ impl<'a> Br<'a> {
     /// Creates a reader over `data`, positioned at bit 0.
     pub(crate) fn new(data: &'a [u8]) -> Self {
         Br { data, pos: 0 }
+    }
+
+    /// The backing RBSP bytes — used only inside `dbgln!`
+    /// diagnostics, which the macro drops in non-test builds.
+    #[allow(dead_code)]
+    pub(crate) fn raw(&self) -> &'a [u8] {
+        self.data
     }
 
     /// Bits still readable.

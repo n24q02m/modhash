@@ -120,18 +120,18 @@ impl MbType {
             5 => Ok(MbType::BPart { p0: (2, 4, 1), p1: (2, 4, 1) }),
             6 => Ok(MbType::BPart { p0: (4, 2, 2), p1: (4, 2, 2) }),
             7 => Ok(MbType::BPart { p0: (2, 4, 2), p1: (2, 4, 2) }),
-            8 => Ok(MbType::BPart { p0: (4, 2, 3), p1: (4, 2, 1) }),
-            9 => Ok(MbType::BPart { p0: (2, 4, 3), p1: (2, 4, 1) }),
+            8 => Ok(MbType::BPart { p0: (4, 2, 1), p1: (4, 2, 2) }),
+            9 => Ok(MbType::BPart { p0: (2, 4, 1), p1: (2, 4, 2) }),
             10 => Ok(MbType::BPart { p0: (4, 2, 2), p1: (4, 2, 1) }),
             11 => Ok(MbType::BPart { p0: (2, 4, 2), p1: (2, 4, 1) }),
             12 => Ok(MbType::BPart { p0: (4, 2, 1), p1: (4, 2, 3) }),
             13 => Ok(MbType::BPart { p0: (2, 4, 1), p1: (2, 4, 3) }),
             14 => Ok(MbType::BPart { p0: (4, 2, 2), p1: (4, 2, 3) }),
             15 => Ok(MbType::BPart { p0: (2, 4, 2), p1: (2, 4, 3) }),
-            16 => Ok(MbType::BPart { p0: (4, 2, 3), p1: (4, 2, 2) }),
-            17 => Ok(MbType::BPart { p0: (2, 4, 3), p1: (2, 4, 2) }),
-            18 => Ok(MbType::BPart { p0: (4, 2, 1), p1: (4, 2, 2) }),
-            19 => Ok(MbType::BPart { p0: (2, 4, 1), p1: (2, 4, 2) }),
+            16 => Ok(MbType::BPart { p0: (4, 2, 3), p1: (4, 2, 1) }),
+            17 => Ok(MbType::BPart { p0: (2, 4, 3), p1: (2, 4, 1) }),
+            18 => Ok(MbType::BPart { p0: (4, 2, 3), p1: (4, 2, 2) }),
+            19 => Ok(MbType::BPart { p0: (2, 4, 3), p1: (2, 4, 2) }),
             20 => Ok(MbType::BPart { p0: (4, 2, 3), p1: (4, 2, 3) }),
             21 => Ok(MbType::BPart { p0: (2, 4, 3), p1: (2, 4, 3) }),
             22 => Ok(MbType::B8x8),
@@ -274,8 +274,17 @@ pub(crate) struct MbState {
     /// bit2 = Cr DC — feeds the cat-0/3 `coded_block_flag` contexts.
     pub dc_coded: u8,
     /// `direct_spatial_mv_pred` in effect for this MB's direct blocks
-    /// (0 = temporal) — the CABAC `direct_flag` context.
+    /// (0 = temporal).
     pub direct_spatial: bool,
+    /// Per-8x8-group direct-prediction flags (bit g = group g is
+    /// `B_Direct_8x8` or a whole-MB direct type) — the CABAC `ref_idx`
+    /// context checks them.
+    pub direct_mask: u8,
+    /// Absolute `mvd_l0` per 4x4 block clamped to <=70 (u8): the CABAC
+    /// `mvd` context sums these for the left/top neighbours.
+    pub mvd_l0: [[u8; 2]; 16],
+    /// Absolute `mvd_l1` per 4x4 block (B slices).
+    pub mvd_l1: [[u8; 2]; 16],
 }
 
 impl MbState {
@@ -301,6 +310,9 @@ impl MbState {
             cbp: 0,
             dc_coded: 0,
             direct_spatial: false,
+            direct_mask: 0,
+            mvd_l0: [[0; 2]; 16],
+            mvd_l1: [[0; 2]; 16],
         }
     }
 }

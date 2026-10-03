@@ -35,6 +35,14 @@ fn compute_bs(cur: &MbState, mb_a: Option<&MbState>, mb_b: Option<&MbState>) -> 
         h: [[0; 4]; 4],
     };
     let cur_intra = is_intra(cur.mb_type);
+    // B slices (two prediction lists) change the last bS rule: motion
+    // must match on every used list, not just L0.
+    let two_lists = !matches!(
+        cur.mb_type,
+        MbType::I4x4 | MbType::I16x16 { .. } | MbType::IPcm | MbType::P8x8
+            | MbType::P8x8Ref0 | MbType::P16x16 | MbType::P16x8 | MbType::P8x16
+            | MbType::PSkip
+    );
 
     for e in 0..4 {
         // Edge is an MB edge when e == 0.
@@ -54,29 +62,27 @@ fn compute_bs(cur: &MbState, mb_a: Option<&MbState>, mb_b: Option<&MbState>) -> 
                         } else if cur.nz[q_blk] > 0 || nb.nz[p_blk] > 0 {
                             2
                         } else {
-                            mv_diff_bs(
-                                cur.mv[q_blk],
-                                nb.mv[p_blk],
-                                cur.ref_idx[q_blk],
-                                nb.ref_idx[p_blk],
-                            )
+                            mv_diff_bs(cur, nb, q_blk, p_blk, two_lists)
                         }
                     }
                 }
             } else {
                 let p_blk = block_index(e - 1, k);
                 let q_blk = block_index(e, k);
-                if cur_intra {
+                if cur.transform8x8 && e % 2 == 1 {
+                    // Edges *inside* an 8x8 transform block are not
+                    // filtered — the transform's coverage is an 8x8
+                    // region, so only the 8x8-grid edge (e = 2) and
+                    // the MB boundary can carry a bS (spec 8.7.2.1
+                    // `filterInternalEdgesFlag` / reference skips the
+                    // odd edges for MB_TYPE_8x8DCT).
+                    0
+                } else if cur_intra {
                     3
                 } else if cur.nz[p_blk] > 0 || cur.nz[q_blk] > 0 {
                     2
                 } else {
-                    mv_diff_bs(
-                        cur.mv[q_blk],
-                        cur.mv[p_blk],
-                        cur.ref_idx[q_blk],
-                        cur.ref_idx[p_blk],
-                    )
+                    mv_diff_bs(cur, cur, q_blk, p_blk, two_lists)
                 }
             };
             m.v[e][k] = bsv;
@@ -94,29 +100,21 @@ fn compute_bs(cur: &MbState, mb_a: Option<&MbState>, mb_b: Option<&MbState>) -> 
                         } else if cur.nz[q_blk] > 0 || nb.nz[p_blk] > 0 {
                             2
                         } else {
-                            mv_diff_bs(
-                                cur.mv[q_blk],
-                                nb.mv[p_blk],
-                                cur.ref_idx[q_blk],
-                                nb.ref_idx[p_blk],
-                            )
+                            mv_diff_bs(cur, nb, q_blk, p_blk, two_lists)
                         }
                     }
                 }
             } else {
                 let p_blk = block_index(k, e - 1);
                 let q_blk = block_index(k, e);
-                if cur_intra {
+                if cur.transform8x8 && e % 2 == 1 {
+                    0
+                } else if cur_intra {
                     3
                 } else if cur.nz[p_blk] > 0 || cur.nz[q_blk] > 0 {
                     2
                 } else {
-                    mv_diff_bs(
-                        cur.mv[q_blk],
-                        cur.mv[p_blk],
-                        cur.ref_idx[q_blk],
-                        cur.ref_idx[p_blk],
-                    )
+                    mv_diff_bs(cur, cur, q_blk, p_blk, two_lists)
                 }
             };
             m.h[e][k] = bsh;
@@ -126,20 +124,52 @@ fn compute_bs(cur: &MbState, mb_a: Option<&MbState>, mb_b: Option<&MbState>) -> 
 }
 
 /// bS = 1 when the reference pictures differ or a motion vector differs
-/// by >= 4 quarter-pel (spec 8.7.2.1 last rules, frame subset).
-fn mv_diff_bs(mv_q: [i16; 2], mv_p: [i16; 2], ref_q: u8, ref_p: u8) -> u8 {
-    if ref_q != ref_p {
-        return 1;
+/// by >= 4 quarter-pel (spec 8.7.2.1's `refPicP != refPicQ || |mv| >= 1`
+/// rules, ported from the reference decoder's `check_mv`: on a B slice
+/// each list is checked independently and, when both fire, the
+/// cross-list combinations too — that's what separates "two
+/// bi-predicted blocks predicting the same pair of pictures in the same
+/// order" (bS 0) from genuinely different motion (bS 1)).
+#[allow(clippy::too_many_arguments)]
+fn mv_diff_bs(
+    q: &MbState,
+    p: &MbState,
+    qb: usize,
+    pb: usize,
+    two_lists: bool,
+) -> u8 {
+    let mvd = |a: [i16; 2], b: [i16; 2]| -> bool {
+        (i32::from(a[0]) - i32::from(b[0])).abs() >= 4
+            || (i32::from(a[1]) - i32::from(b[1])).abs() >= 4
+    };
+    let rq0 = q.ref_idx[qb] as i32;
+    let rp0 = p.ref_idx[pb] as i32;
+    let mut v = rq0 != rp0;
+    if !v && rq0 != -1 && rp0 != -1 && rq0 != 0xff && rp0 != 0xff {
+        v = mvd(q.mv[qb], p.mv[pb]);
     }
-    if ref_q == 0xff {
-        // Neither side inter-coded (skip blocks with no residual keep
-        // the picture's default vector — same picture, same vector).
-        return 0;
+    if !two_lists {
+        return u8::from(v);
     }
-    if (i32::from(mv_q[0]) - i32::from(mv_p[0])).abs() >= 4
-        || (i32::from(mv_q[1]) - i32::from(mv_p[1])).abs() >= 4
-    {
-        1
+    // B slice: repeat for list 1, then cross-check L0(q) vs L1(p) and
+    // L1(q) vs L0(p) when a difference already fired — the spec's
+    // `diffPicOrderCnt` formulation only stays bS 0 when a *matching*
+    // list pair shares picture and motion.
+    let rq1 = q.ref_idx_l1[qb] as i32;
+    let rp1 = p.ref_idx_l1[pb] as i32;
+    if !v {
+        v = rq1 != rp1
+            || (rq1 != -1 && rq1 != 0xff && rp1 != -1 && rp1 != 0xff && mvd(q.mv_l1[qb], p.mv_l1[pb]));
+    }
+    if v {
+        if rq0 != rp1 || rq1 != rp0 {
+            return 1;
+        }
+        let cross = (rq0 != -1 && rq0 != 0xff && rp1 != -1 && rp1 != 0xff
+            && mvd(q.mv[qb], p.mv_l1[pb]))
+            || (rq1 != -1 && rq1 != 0xff && rp0 != -1 && rp0 != 0xff
+                && mvd(q.mv_l1[qb], p.mv[pb]));
+        u8::from(cross)
     } else {
         0
     }

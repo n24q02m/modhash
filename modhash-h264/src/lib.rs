@@ -43,6 +43,8 @@
 
 extern crate alloc;
 
+mod cabac;
+mod cabac_tables;
 mod cavlc;
 mod deblock;
 mod decoder;

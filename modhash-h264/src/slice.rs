@@ -116,6 +116,32 @@ pub(crate) struct SliceHeader {
     pub offset_b: i8,
 }
 
+/// One `ref_pic_list_reordering` loop (spec 7.3.3.1): `(idc, value)`
+/// pairs terminated by idc 3.
+fn read_reorder(
+    br: &mut Br<'_>,
+    list: &mut alloc::vec::Vec<(u32, u32)>,
+    cap: u32,
+) -> Result<()> {
+    loop {
+        let idc = br.ue()?;
+        if idc > 3 {
+            return Err(Error::BadValue("reordering_of_pic_nums_idc over 3"));
+        }
+        if idc == 3 {
+            break;
+        }
+        // idc 0/1 take abs_diff_pic_num_minus1, idc 2 takes
+        // long_term_pic_num — all ue(v) in the stream.
+        let v = br.ue()?;
+        if list.len() >= cap as usize + 2 {
+            return Err(Error::BadValue("ref_pic_list_reordering too long"));
+        }
+        list.push((idc, v));
+    }
+    Ok(())
+}
+
 /// Parses the slice header from `br`, returning the header and leaving
 /// `br` at the first `slice_data` bit. `idr` distinguishes IDR NALs.
 pub(crate) fn parse_header(
@@ -193,30 +219,11 @@ pub(crate) fn parse_header(
     // ref_pic_list_reordering (spec 7.4.3.1): L0 on P and B, L1 on B.
     let mut reorder_l0 = alloc::vec::Vec::new();
     let mut reorder_l1 = alloc::vec::Vec::new();
-    let mut read_reorder = |list: &mut alloc::vec::Vec<(u32, u32)>, cap: u32| -> Result<()> {
-        loop {
-            let idc = br.ue()?;
-            if idc > 3 {
-                return Err(Error::BadValue("reordering_of_pic_nums_idc over 3"));
-            }
-            if idc == 3 {
-                break;
-            }
-            // idc 0/1 take abs_diff_pic_num_minus1, idc 2 takes
-            // long_term_pic_num — all ue(v) in the stream.
-            let v = br.ue()?;
-            if list.len() >= cap as usize + 2 {
-                return Err(Error::BadValue("ref_pic_list_reordering too long"));
-            }
-            list.push((idc, v));
-        }
-        Ok(())
-    };
     if matches!(slice_type, SliceType::P | SliceType::B) && br.bit()? {
-        read_reorder(&mut reorder_l0, num_ref_idx_l0_active)?;
+        read_reorder(br, &mut reorder_l0, num_ref_idx_l0_active)?;
     }
     if slice_type == SliceType::B && br.bit()? {
-        read_reorder(&mut reorder_l1, num_ref_idx_l1_active)?;
+        read_reorder(br, &mut reorder_l1, num_ref_idx_l1_active)?;
     }
     // pred_weight_table (spec 7.4.3.2): P under `weighted_pred_flag`,
     // B under `weighted_bipred_idc == 1` (explicit weights). idc 2 is
@@ -305,9 +312,11 @@ pub(crate) fn parse_header(
             }
         } else {
             adaptive_marking = br.bit()?;
+            crate::dbgln!("mmco nal_ref={} fnum={} adapt={} pos={} st={} nr0={} nr1={} ro0={} ro1={} wp0={} wp1={} poc={} nro={} bytes={:?}", nal_ref_idc, frame_num, adaptive_marking, br.position(), slice_type as u8, num_ref_idx_l0_active, num_ref_idx_l1_active, reorder_l0.len(), reorder_l1.len(), wp_l0.is_some(), wp_l1.is_some(), pic_order_cnt_lsb, num_ref_override, &br.raw()[(br.position()/8).saturating_sub(2)..(br.position()/8+10).min(br.raw().len())]);
             if adaptive_marking {
                 loop {
                     let op = br.ue()?;
+                    crate::dbgln!("  mmco op={} pos={}", op, br.position());
                     if op == 0 {
                         break;
                     }
