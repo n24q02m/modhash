@@ -682,18 +682,6 @@ pub(crate) fn decode_residual(
             out.levels[j] = cb.bypass_sign(-coeff_abs)?;
         }
     }
-    // Map scan positions through the caller's table into `levels`
-    // raster slots: levels are currently keyed by scan position, so
-    // re-index once.
-    let mut raster = [0i32; 64];
-    for (pos, &lv) in out.levels.iter().enumerate().take(max) {
-        if pos < scan.len() {
-            raster[scan[pos] as usize] = lv;
-        } else {
-            raster[pos] = lv;
-        }
-    }
-    out.levels = raster;
     out.total_coeff = count as u8;
     Ok(out)
 }

@@ -1564,9 +1564,11 @@ fn chroma_recon(
         }
         let dc = transform::inv_chroma_dc(&chroma_dc[c], qpc);
         dbgln!(
-            "  chroma{c} dc raw {:?} -> {:?} qpc {qpc}",
+            "  chroma{c} dc raw {:?} -> {:?} qpc {qpc} mode{} ac{:?}",
             chroma_dc[c],
-            dc
+            dc,
+            m.chroma_pred,
+            chroma_ac[c]
         );
         let plane = if c == 0 {
             &mut pic.buf.cb
@@ -3220,8 +3222,7 @@ fn mb_decode_cabac(
             let cbf_ctx = dc_cbf_ctx(&pic.mbs, map, 0);
             let r = cabac::decode_residual(cab, ResCat::LumaDc16x16, cbf_ctx, &ZIGZAG_4X4)?;
             for s in 0..16 {
-                dc_y[ZIGZAG_4X4[s] as usize] = 0;
-                dc_y[s] = r.levels[s];
+                dc_y[ZIGZAG_4X4[s] as usize] = r.levels[s];
             }
             if r.total_coeff > 0 {
                 m.dc_coded |= 1;
@@ -3258,7 +3259,9 @@ fn mb_decode_cabac(
                     cbf_ctx,
                     &ZIGZAG_8X8,
                 )?;
-                luma_res8[g] = r.levels;
+                for s in 0..64 {
+                    luma_res8[g][ZIGZAG_8X8[s] as usize] = r.levels[s];
+                }
                 for s4 in 0..4usize {
                     nz_acc[blk + s4] = r.total_coeff.min(63);
                 }
@@ -3279,8 +3282,7 @@ fn mb_decode_cabac(
                     )?;
                     dbgln!("  resid mb{} blk{} tc={} pos={}", map.idx, blk, r.total_coeff, cab.pos());
                     for s in 0..16 {
-                        luma_res[blk][ZIGZAG_4X4[s] as usize] = 0;
-                        luma_res[blk][s] = r.levels[s];
+                        luma_res[blk][ZIGZAG_4X4[s] as usize] = r.levels[s];
                     }
                     nz_acc[blk] = r.total_coeff;
                 }
