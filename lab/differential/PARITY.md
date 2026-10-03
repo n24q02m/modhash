@@ -29,7 +29,7 @@ nhieu deps voi rust zero deps" — end-to-end on one corpus.
 | image tier-2 (pHash) | **SAME** | mirror `lab/phash_oracle.py` (kit.md chain) == rust `image_phash` == cv2-free equivalent |
 | wav/flac pcm i32 | **SAME** | `sf.read(int32) >> 16` == rust native-range i32; `wav_native` path also MATCH on 16-bit WAV |
 | mono downmix | **SAME** | `trunc((l+r)/2)` in native domain byte-identical |
-| mp3 decode | **SAME*** | near bit-exact vs libmpg123: corr ≥0.9999, ratio 1.0, delay = LAME/Xing trim only (`l3_short` 24192v22050); **`l3_48k` polarity −1.0 — real sign bug in modhash-mp3 48k path** |
+| mp3 decode | **SAME*** | near bit-exact vs libmpg123: aligned steady-state corr = 1.000000, max |d| ≈ 0.03% FS (sub-LSB); only real delta = LAME/Xing gapless trim (24192v22050) — optional improvement, not a bug |
 | audio tier-2 (peaks) | DIVERGED | rust: 44.1k/4096/257-bin peaks; py: 16k/1024/64-bin MinHash-like keys — BY-DESIGN |
 | video Y plane | **SAME** | rust h264 decode == ffmpeg rawvideo yuv420p, byte-equal, every frame every file |
 | video frame phash | **SAME** | `frame_phash(Y)` == mirror phash on same Y plane, all 32×5 frames |
@@ -59,7 +59,7 @@ nhieu deps voi rust zero deps" — end-to-end on one corpus.
 |---|---|---|
 | `text_page.pdf` + `standard_default.pdf` text: rust `na<U+FFFD>ve` vs py `naïve` | **FIXED → MATCH** | verdict (spec-owner): WinAnsi fallback for non-symbolic Type1 w/o `/Encoding` — implemented in `font.rs` `simple_base_table`; both files now byte-equal to pypdf |
 | `stereo_441.wav` `pcm_mono` first-run MISMATCH | **artifact, not a bug** | comparing `(mono)>>16` vs `mono(native)` double-floored negative odd sums; native-domain downmix is byte-identical (sha `0f9c35…` == `0f9c35…`) |
-| mp3 `pcm_i32`/`pcm_mono` MISMATCH ×3 | **artifact + 1 real bug** | scale bug in my comparator — rust mp3 PCM is full-scale i32 (like sf), not `>>16` native; aligned segments corr ≥0.9999, ratio ~1.0 (near bit-exact). Real: (a) LAME/Xing gapless trim (frame count), (b) **`l3_48k` decodes polarity-inverted** (corr −0.9999, sample ratio −1.0) — a real `modhash-mp3` sign bug in the 48 kHz path, flagged for fix lane |
+| mp3 `pcm_i32`/`pcm_mono` MISMATCH ×3 | **artifact, no decoder bug** | two comparator artifacts: (1) scale — rust mp3 PCM is full-scale i32 (like sf), not `>>16` native; (2) periodic-tone correlate picked a wrong-period offset → phantom −1.0 "polarity". Re-measure: aligned windows corr = 1.000000, max |d| = 0.03% FS — near bit-exact. Only real delta: LAME/Xing gapless trim (frame count), optional improvement |
 | `a_frag`/`audioonly`/`minimal`/`e_mp4v`/`high_64x48` | named refusals | rust `unsupported:`/`bad value:`/`truncated:` — spec-shaped errors |
 | all `phash_mirror_video` first-run MISMATCH | **artifact** | my `diff.py` import `lab.phash_oracle` failed (no `__init__.py`) → `mirror=None` → all False; fixed → all MATCH |
 

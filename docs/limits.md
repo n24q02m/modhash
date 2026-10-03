@@ -51,16 +51,16 @@ Documented by the `lab/differential` parity run (72-file corpus):
   U+00EF), matching pypdf/Acrobat; only `/Symbol`, `/ZapfDingbats` and
   `Type3` keep their own tables (ecosystem-aligned choice,
   diff-oracle 2026-10-03).
-- **MP3 PCM**: decoded output is *near bit-exact* with libmpg123 (via
-  libsndfile) — segment correlation ≥ 0.9999 on all corpus files, median
-  sample ratio 1.0 (sub-LSB rounding in the synthesis filterbank). The
-  two real divergences are (a) *gapless trim*: libsndfile drops the
-  LAME/Xing encoder delay (e.g. `l3_short` 24192 vs 22050 frames) while
-  this decoder emits every coded frame — same waveform, shifted;
-  (b) *polarity*: `l3_48k` (48 kHz MPEG-2) decodes with inverted sign vs
-  libmpg123 (corr −0.9999) — a real sign bug in the 48 kHz path, flagged
-  for the fix lane. Tier-2 peak fingerprints are unaffected — the
-  comparable axis is the spectral-peak set, not raw PCM.
+- **MP3 PCM**: the hand-written decoder is *near bit-exact* with
+  libmpg123 (via libsndfile) — aligned steady-state windows correlate
+  to 1.000000 (max |d| ≈ 0.03% of full scale, sub-LSB synthesis
+  rounding) on every corpus file. The one real divergence is *gapless
+  trim*: libsndfile drops the LAME/Xing encoder delay (e.g. `l3_short`
+  24192 vs 22050 frames) while this decoder emits every coded frame —
+  same waveform, shifted. An optional gapless-trim pass is a future
+  improvement, not a correctness bug. (A suspected 48 kHz polarity
+  inversion was re-measured as a periodic-tone comparator artifact:
+  `l3_48k` aligns at corr = 1.0.)
 - **Audio canonical**: tier-1 pins 44.1 kHz mono i32 (`rate ∥ n ∥ pcm`);
   non-44.1k input is a named `Unsupported`, not a silent resample.
 - **Video tier-2**: fixed 2 fps luma sampling + per-frame pHash differs
