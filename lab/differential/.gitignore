@@ -1,0 +1,6 @@
+# Binary intermediates (reproducible via run_*.sh + diff.py):
+results/dumps/
+results/dumps_py/
+results/dumps_ffmpeg/
+probe/target/
+__pycache__/

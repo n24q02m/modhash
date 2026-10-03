@@ -1,0 +1,4 @@
+<p class="x">Hello, World! This is a tag-stripped "sample" — with em-dash, ellipsis… and CRLF.
+<p class="x">Hello, World! This is a tag-stripped "sample" — with em-dash, ellipsis… and CRLF.
+<p class="x">Hello, World! This is a tag-stripped "sample" — with em-dash, ellipsis… and CRLF.
+<p class="x">Hello, World! This is a tag-stripped "sample" — with em-dash, ellipsis… and CRLF.

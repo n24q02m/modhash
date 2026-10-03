@@ -1,0 +1,73 @@
+file	origin	source	sha256	bytes
+audio/l3_48k.mp3	copy	modhash-mp3\tests\fixtures\l3_48k.mp3	e5f55006ecc2a6e72aac5c82d641d608e46893f5a0c171ba206c98f1e92104d7	7244
+audio/l3_mono.mp3	copy	modhash-mp3\tests\fixtures\l3_mono.mp3	2ac0e4e36434e67ee83a5c5932761717a41d903be4c35cea1c9187ae9851de38	4432
+audio/l3_short.mp3	copy	lab\smoke-fixtures\l3_short.mp3	8ce6cf98f137dd7a2adb7fe0c41762ecbb45f12781cf3b92fa3a1bb59b7d7c30	4640
+audio/stereo_441.wav	gen	440+880Hz stereo 1s 44.1k i16	0e28d1d1f7eecd23ec7ce20e7d41964d9d4a17b1f58eb6cf78f96f5035710029	176444
+audio/tone.flac	copy	lab\smoke-fixtures\tone.flac	f954b800b5476f06529b365ed429da96fbf9961067073e955c1966d5fa098d9e	88363
+audio/tone.wav	copy	lab\smoke-fixtures\tone.wav	041f510695ee6121436e14f59fcf4a680a57f0e9d3f8da9e1d76e2ab8fb522fc	88244
+audio/tone22.wav	copy	modhash\tests\fixtures\tone22.wav	6d2dc990924d8cb1ac17db12a23358020d64384c0af400c03474fa4c1351bcf9	44144
+audio/wav24.wav	gen	220Hz mono 0.5s 44.1k i24	02d44690643cdaa463f0f02861c41f6122049cd858316296d1471886c1f36801	66194
+audio/wav8_22k.wav	gen	330Hz mono 0.5s 22.05k u8	8b4ebaf319a87d8ea1ff83a3ea36fb68a99e7b859c4d9c529420402c8c1491ee	11069
+bin/blob.bin	copy	lab\smoke-fixtures\blob.bin	238daef3e75579c2f0ff5bb68835a74a90385154f2465de56e309bb85a39a305	49152
+bin/f_a.bin	gen	splitmix DEADBEEFCAFEF00D 400KB	300ad528a0cf9e7ece6f1d9f5007de6281ef57629d8bc0fa190104318859c976	400000
+bin/f_copy.bin	gen	byte copy of f_a	300ad528a0cf9e7ece6f1d9f5007de6281ef57629d8bc0fa190104318859c976	400000
+bin/f_mod.bin	gen	f_a + 1-byte insert @100K	409c3db941469f7cfeea6fdae9c603b82f9e18f0adab816bf1b9941331da5c1c	400001
+bin/f_other.bin	gen	splitmix 0123456789ABCDEF 400KB	b25f24003717dc73d512a16238a6c719ae279f6fbdaff5d3fde44c5fb0db5664	400000
+bin/f_tail.bin	gen	f_a minus last 40KB	a08a4627ab643b412b7ec4e5619790816fe85160163c3b0795e7a7167f467f1e	360000
+bin/hello.docx	gen	docx stored, 2 paragraphs	d72438af88d854ef10f45de0c64e2f855c614bb357c32e60229c3a47b5587586	1400
+bin/minimal.zip	copy	lab\smoke-fixtures\minimal.zip	e31853d065dd9109c238606f8a9a2ccbfd359719a8db4447c11126acfe93461e	230
+bin/pack_deflated.zip	gen	same members, deflated	517589d5d97737383352ee18e492783df2e52b3a29c60a90fda0a439f0e9abde	50340
+bin/pack_stored.zip	gen	same members, stored	43645587440d027bd7eac72fd95ae4ca506035b57fb83152fd1a804eaf1a8147	50856
+img/adam7_13x11_rgb.png	copy	modhash-png\tests\fixtures\adam7_13x11_rgb.png	0af224a61fd15d1b509f37585c32995113aaa7860753be2b6e55b8f67c70afeb	412
+img/base_422.jpg	copy	modhash-jpeg\tests\fixtures\base_422.jpg	834ab879b8b769758e8c3057ff032502c2273ea84bfd4a14e11acaf9d2dd4c04	769
+img/base_444.jpg	copy	lab\smoke-fixtures\base_444.jpg	ca77d25132c6460bf7b386774ee640508a714402108b299e812076b175da4d31	1325
+img/base_444.png	copy	lab\smoke-fixtures\base_444.png	1fea29e8e60a50994ef11173f1d2ad4a1308aa3507e0e852227327a92dea3f31	2396
+img/base_gray.jpg	copy	modhash-jpeg\tests\fixtures\base_gray.jpg	357366347cfa0e98c016ef5087b5f1eba2c0a64b8d048968827ec8544f59226c	807
+img/big_1200x800.png	gen	splitmix 0xB16 1200x800 RGB8 PNG	d476f2517003edbb06be2351c50c5ed8a4a1e77d5c0be5221a0ccfdb6822e9f7	2870690
+img/flat.gif	gen	literal GIF89a 1x1	693d949d8c3fdc7fd4ace7c340b5f177a9f0c5be7bafee8bc93a7d88b7523d75	43
+img/gray16_3x2.png	copy	modhash-png\tests\fixtures\gray16_3x2.png	013f92e23e78e670989136941348c0d7115495531bae15c32f8e1e9c95bde022	79
+img/p24_bottom_up.bmp	copy	modhash-bmp\tests\fixtures\p24_bottom_up.bmp	a9993230c9862d5ee38b27897bf1a3e734157aac6aa2db4b169401580f8ad48f	118
+img/p24_top_down.bmp	copy	lab\smoke-fixtures\p24_top_down.bmp	330957ee4e3b5529d8d9d3234eaf4b0f8d5afdd0ea682749ac6f81eaee170032	118
+img/p32_v5_rgb.bmp	copy	modhash-bmp\tests\fixtures\p32_v5_rgb.bmp	9dee21f9ac8922c09951d43269ff066c35bdcf59921f4972c95d44e2e7b78ef1	218
+img/phash_rgb8_48x40.png	copy	lab\smoke-fixtures\phash_rgb8_48x40.png	5ffd68d91cf65683a2ddb36a764dcea316474c687b4ee9347de2e7e233aec38b	5868
+img/prog_420.jpg	copy	modhash-jpeg\tests\fixtures\prog_420.jpg	bfb2a341a511f7a358ed3843ec81df65c9db39d3477282b7d46d66060bc4ae44	984
+img/prog_444.jpg	copy	modhash-jpeg\tests\fixtures\prog_444.jpg	fa74758cb2cd972924867014b42163035ab10419eed96023f401f0bf25b9ac7b	568
+img/prog_gray.jpg	copy	modhash-jpeg\tests\fixtures\prog_gray.jpg	54cb9e8eba773958e73d2a236305ad4485f87371f4c6467088002f5155f365bf	711
+img/rgb16_3x2.png	copy	modhash-png\tests\fixtures\rgb16_3x2.png	bee24a3bc3a138575e6e8dc79945330d1bf95dd172b39463b1fae4fbf007a0cf	106
+img/rgba16_2x2.png	copy	modhash-png\tests\fixtures\rgba16_2x2.png	bb111af6c7e9450f0d8624e01bdce1c826f47ae73454c8b2bf5c5544d7d0ebc7	100
+img/rle8.bmp	copy	modhash-bmp\tests\fixtures\rle8.bmp	8b7ac308b7a00dac3f4bcdc169e2a56ad4473f2677e21427bd8146c58f540a9c	1110
+real/audio_a.wav	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\real-check\tep\audio_a.wav	914aecdac939b3630f3477f2d1110b540f255c1b18110fceae6d58ecb751a31c	192044
+real/audio_a_quiet.wav	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\real-check\tep\audio_a_quiet.wav	b7ee2de73f36ff7a08f6a6049663dd7a2b3958f149603f65a719c93ec6c82b64	192044
+real/city_1.jpg	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\image-search\city-street-architecture-buildings-photo-1.jpg	588f69a2313b8030b3a25182fac66476572a35824d706706af13b9df20e1f2f2	2059816
+real/img_a.png	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\real-check\tep\img_a.png	aa2de22f743c707ca58ba753d0c8ebb5f062fb349d67407a2b147ef7861c00bf	133689
+real/img_b.jpg	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\real-check\tep\img_b.jpg	ebc686dbeaad72f69c4d7731e47b421174d766620ef8a2e2a786d91961c1918a	5576
+real/img_other.png	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\real-check\tep\img_other.png	07ccf8d9c0531e7359dc45ec6f6d79c71c57cbe42bbe26a2d4d0acdc668d861b	134337
+real/portrait_1.jpg	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\image-search\portrait-close-up-human-face-person-stud-1.jpg	c8e2788d4cc91870f36589ab20ded95054faeb89c33dda705d9e53fbe80f8e3f	26126
+real/text_a.txt	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\real-check\tep\text_a.txt	66cb25e219ebf4948363a8b307abd7ad5a9b20838c03b989afa2422d412abaa9	565
+real/text_a_edit.txt	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\real-check\tep\text_a_edit.txt	b1a8a30b61cb296a0a4ca23501667e493e5787998596f38188856ad30a9747c6	661
+real/text_b.txt	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\real-check\tep\text_b.txt	5a0e002008b72fcd6bbeca3a5a171ee7b864e59c70d3ba0584a384dd24c55365	239
+real/v_clip.avi	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\real-check\tep\v_clip.avi	4a5f3b73d4a7f857af2e09fdc9b1abb8625df85847b415737588a928dbe625fa	77718
+text/doc_a.txt	gen	60-phrase doc	1c19be4e83341d40bdd6b0644f839adb17fcfa8e4616528728753cfb864c3223	4131
+text/doc_a_edit.txt	gen	doc_a with 1 phrase changed	573cf11bd6a713ab5b3b9435d6e72f0ad78570bc1299e123f409193dafa57be4	4149
+text/doc_b.txt	gen	different 60-phrase doc	01f60b91d843c1e78afe35a439f718bb43d5c72a0819e61f99fce0f1184e8f63	3711
+text/encrypted.pdf	copy	modhash-pdf\tests\fixtures\encrypted.pdf	9d1de094df0ce32be7dcfa758d9f2e9fc28e221f1aa11a75c1e006257b69e5ca	936
+text/macroman.pdf	copy	modhash-pdf\tests\fixtures\macroman.pdf	5a1e303532ab5833ae2b9b3242a6c32d2a3c3e5890e7dd8bf9842535f283e8bb	709
+text/objstm.pdf	copy	modhash-pdf\tests\fixtures\objstm.pdf	2cc506960612b7eb6aa91803146c45ce3118c385124df84b4d20eb057bf09eb6	854
+text/prose.txt	copy	lab\smoke-fixtures\prose.txt	754d411b311d9243901a0b45c1fea81368a2b252d906fdcf1b6b882f1d7e16ee	2172
+text/punct_tags.txt	gen	html+punct+crlf	24538fa0872b9c19f005c765fb3b37215d87ee67b43c2cbabff5aad89c7efbe3	404
+text/short_two.txt	gen	2-word doc: rust shingles, py empty	1e46973300d8b1d343e325072cab6fe4360a1841959b4e96874b2d1066c183db	10
+text/standard_default.pdf	copy	modhash-pdf\tests\fixtures\standard_default.pdf	81357e9f4320adeed446075dc57fa0690a4d1aa6c4296f91c29da077170b061d	670
+text/text_page.pdf	copy	lab\smoke-fixtures\text_page.pdf	81357e9f4320adeed446075dc57fa0690a4d1aa6c4296f91c29da077170b061d	670
+text/tounicode_bfrange.pdf	copy	modhash-pdf\tests\fixtures\tounicode_bfrange.pdf	b7778282181a85a554e02db67dc96b2599ef4f6a91fa69e9de2ebb701e5f821b	1201
+text/vi_nfc.txt	gen	composed vietnamese x3	5a9c2a90cb9460aee7863b55c6045536dd369b7bec4ea036a0802805b12c4ef2	183
+text/vi_nfd.txt	gen	decomposed vietnamese x3	a42a3b0c632e4258c5949b27e5f52fe832b82ae288b4e92b9ff37727ffe26114	228
+video/a_128x96.mp4	copy	modhash-video\tests\fixtures\a_128x96.mp4	be857130d02561ed0c9b7776821cf798a4dcbdb392afd31f6a4767270b16325d	7974
+video/a_64x48.mov	copy	modhash-video\tests\fixtures\a_64x48.mov	5340a9bb58a97b3238ac1595f996c8db306ec008b5b279c4befee5e603bb513c	5991
+video/a_64x48.mp4	copy	lab\smoke-fixtures\a_64x48.mp4	fe641153a25f55b84a67a5f148fdea731d035a90a1d1a9b460408cf892b3589a	6044
+video/a_crf40.mp4	copy	modhash-video\tests\fixtures\a_crf40.mp4	44e60a8929b8a8b74da3591c498c42a0680402632d4c0388e8917b102ef552fa	3361
+video/a_frag.mp4	copy	modhash-video\tests\fixtures\a_frag.mp4	85f2a5fba4b27a031cdf8a7a75291bd3900b9eb6339eb59322b9e943b0fc4822	3938
+video/audioonly.mp4	copy	modhash-video\tests\fixtures\audioonly.mp4	b450a2869107beb187eac60f546108866d7f059681f8b899f4a25b76ca71adb0	10003
+video/b_64x48.mp4	copy	modhash-video\tests\fixtures\b_64x48.mp4	7721c9352f71fdd3073f6e1b03da88906a8477d7dc29ba672ca75b14df20382e	12251
+video/e_mp4v.mp4	copy	modhash-video\tests\fixtures\e_mp4v.mp4	d7325b5341add0b1607371040a480c1115302ec370602a3b7fc52252c06e7eb2	25181
+video/high_64x48.mp4	copy	modhash-video\tests\fixtures\high_64x48.mp4	405ac3df8af9e0c58c498900803bf19dcde9e50c85ed31689a99f4872bc7b1f0	2954
+video/minimal.mp4	copy	lab\smoke-fixtures\minimal.mp4	53c629c9250c83cf21df9e10c4af328ecc6cf4ba0ae7570830ab48401b8a204b	748

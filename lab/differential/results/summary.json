@@ -1,0 +1,2959 @@
+{
+ "counts": {
+  "ingest_RUST-N/A": 7,
+  "tier1_BY-DESIGN": 30,
+  "decode_aud_MISMATCH": 3,
+  "ingest_BOTH": 59,
+  "decode_aud_MATCH": 8,
+  "tier1_MATCH": 41,
+  "decode_zip_MATCH": 4,
+  "decode_img_MATCH": 22,
+  "t2_phash_NA": 22,
+  "ingest_PY-N/A": 2,
+  "tier1_RUST-N/A": 1,
+  "decode_img_SKIP": 1,
+  "t2_phash_RUST-N/A": 1,
+  "decode_vid_SKIP": 1,
+  "decode_pdf_RUST-N/A": 1,
+  "decode_pdf_MATCH": 4,
+  "decode_pdf_CLOSE": 1,
+  "decode_vid_MATCH": 5,
+  "decode_vid_RUST-N/A": 5,
+  "ingest_NEITHER": 4
+ },
+ "rows": [
+  {
+   "file": "audio/l3_48k.mp3",
+   "ext": ".mp3",
+   "rust_modality": "audio",
+   "rust_format": "mp3",
+   "py_modality": "audio",
+   "ingest": {
+    "rust": "refused:audio: unsupported: audio sample rate \u2260 44100 Hz",
+    "py": "ok"
+   },
+   "ingest_status": "RUST-N/A",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "pcm_i32": "MISMATCH",
+    "pcm_mono": "MISMATCH",
+    "pcm_max_abs_diff": 255077394
+   },
+   "tier2": {
+    "audio_peaks": "BY-DESIGN(no shared axis)",
+    "py_keys": 0
+   }
+  },
+  {
+   "file": "audio/l3_mono.mp3",
+   "ext": ".mp3",
+   "rust_modality": "audio",
+   "rust_format": "mp3",
+   "py_modality": "audio",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "pcm_i32": "MISMATCH",
+    "pcm_mono": "MISMATCH",
+    "pcm_max_abs_diff": 506545792
+   },
+   "tier2": {
+    "audio_peaks": "BY-DESIGN(no shared axis)",
+    "rust": {
+     "frames": 6,
+     "peaks": 9
+    },
+    "py_keys": 0
+   }
+  },
+  {
+   "file": "audio/l3_short.mp3",
+   "ext": ".mp3",
+   "rust_modality": "audio",
+   "rust_format": "mp3",
+   "py_modality": "audio",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "pcm_i32": "MISMATCH",
+    "pcm_mono": "MISMATCH",
+    "pcm_max_abs_diff": 606390736
+   },
+   "tier2": {
+    "audio_peaks": "BY-DESIGN(no shared axis)",
+    "rust": {
+     "frames": 10,
+     "peaks": 53
+    },
+    "py_keys": 0
+   }
+  },
+  {
+   "file": "audio/stereo_441.wav",
+   "ext": ".wav",
+   "rust_modality": "audio",
+   "rust_format": "wav",
+   "py_modality": "audio",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "pcm_i32": "MATCH(shl16)",
+    "pcm_mono": "MATCH(native-via-shl16)",
+    "wav_native": "MATCH"
+   },
+   "tier2": {
+    "audio_peaks": "BY-DESIGN(no shared axis)",
+    "rust": {
+     "frames": 20,
+     "peaks": 44
+    },
+    "py_keys": 0
+   }
+  },
+  {
+   "file": "audio/tone.flac",
+   "ext": ".flac",
+   "rust_modality": "audio",
+   "rust_format": "flac",
+   "py_modality": "audio",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "pcm_i32": "MATCH(shl16)",
+    "pcm_mono": "MATCH(native-via-shl16)"
+   },
+   "tier2": {
+    "audio_peaks": "BY-DESIGN(no shared axis)",
+    "rust": {
+     "frames": 20,
+     "peaks": 99
+    },
+    "py_keys": 0
+   }
+  },
+  {
+   "file": "audio/tone.wav",
+   "ext": ".wav",
+   "rust_modality": "audio",
+   "rust_format": "wav",
+   "py_modality": "audio",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "pcm_i32": "MATCH(shl16)",
+    "pcm_mono": "MATCH(native-via-shl16)",
+    "wav_native": "MATCH"
+   },
+   "tier2": {
+    "audio_peaks": "BY-DESIGN(no shared axis)",
+    "rust": {
+     "frames": 20,
+     "peaks": 99
+    },
+    "py_keys": 0
+   }
+  },
+  {
+   "file": "audio/tone22.wav",
+   "ext": ".wav",
+   "rust_modality": "audio",
+   "rust_format": "wav",
+   "py_modality": "audio",
+   "ingest": {
+    "rust": "refused:audio: unsupported: audio sample rate \u2260 44100 Hz",
+    "py": "ok"
+   },
+   "ingest_status": "RUST-N/A",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "pcm_i32": "MATCH(shl16)",
+    "pcm_mono": "MATCH(native-via-shl16)",
+    "wav_native": "MATCH"
+   },
+   "tier2": {
+    "audio_peaks": "BY-DESIGN(no shared axis)",
+    "py_keys": 0
+   }
+  },
+  {
+   "file": "audio/wav24.wav",
+   "ext": ".wav",
+   "rust_modality": "audio",
+   "rust_format": "wav",
+   "py_modality": "audio",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "pcm_i32": "MATCH(shl8)",
+    "pcm_mono": "MATCH(native-via-shl8)",
+    "wav_native": "MATCH"
+   },
+   "tier2": {
+    "audio_peaks": "BY-DESIGN(no shared axis)",
+    "rust": {
+     "frames": 9,
+     "peaks": 17
+    },
+    "py_keys": 0
+   }
+  },
+  {
+   "file": "audio/wav8_22k.wav",
+   "ext": ".wav",
+   "rust_modality": "audio",
+   "rust_format": "wav",
+   "py_modality": "audio",
+   "ingest": {
+    "rust": "refused:audio: unsupported: audio sample rate \u2260 44100 Hz",
+    "py": "ok"
+   },
+   "ingest_status": "RUST-N/A",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "pcm_i32": "MATCH(shl24)",
+    "pcm_mono": "MATCH(native-via-shl24)",
+    "wav_native": "MATCH"
+   },
+   "tier2": {
+    "audio_peaks": "BY-DESIGN(no shared axis)",
+    "py_keys": 0
+   }
+  },
+  {
+   "file": "bin/blob.bin",
+   "ext": ".bin",
+   "rust_modality": "binary",
+   "rust_format": "unknown",
+   "py_modality": "file",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "cdc_chunks": {
+     "rust": 6,
+     "py": 17,
+     "ratio": 0.353
+    }
+   },
+   "tier2": {
+    "chunk_set": "BY-DESIGN(cdc params+digest differ)"
+   }
+  },
+  {
+   "file": "bin/f_a.bin",
+   "ext": ".bin",
+   "rust_modality": "binary",
+   "rust_format": "unknown",
+   "py_modality": "file",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "cdc_chunks": {
+     "rust": 42,
+     "py": 148,
+     "ratio": 0.284
+    }
+   },
+   "tier2": {
+    "chunk_set": "BY-DESIGN(cdc params+digest differ)"
+   }
+  },
+  {
+   "file": "bin/f_copy.bin",
+   "ext": ".bin",
+   "rust_modality": "binary",
+   "rust_format": "unknown",
+   "py_modality": "file",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "cdc_chunks": {
+     "rust": 42,
+     "py": 148,
+     "ratio": 0.284
+    }
+   },
+   "tier2": {
+    "chunk_set": "BY-DESIGN(cdc params+digest differ)"
+   }
+  },
+  {
+   "file": "bin/f_mod.bin",
+   "ext": ".bin",
+   "rust_modality": "binary",
+   "rust_format": "unknown",
+   "py_modality": "file",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "cdc_chunks": {
+     "rust": 42,
+     "py": 148,
+     "ratio": 0.284
+    }
+   },
+   "tier2": {
+    "chunk_set": "BY-DESIGN(cdc params+digest differ)"
+   }
+  },
+  {
+   "file": "bin/f_other.bin",
+   "ext": ".bin",
+   "rust_modality": "binary",
+   "rust_format": "unknown",
+   "py_modality": "file",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "cdc_chunks": {
+     "rust": 42,
+     "py": 160,
+     "ratio": 0.263
+    }
+   },
+   "tier2": {
+    "chunk_set": "BY-DESIGN(cdc params+digest differ)"
+   }
+  },
+  {
+   "file": "bin/f_tail.bin",
+   "ext": ".bin",
+   "rust_modality": "binary",
+   "rust_format": "unknown",
+   "py_modality": "file",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "cdc_chunks": {
+     "rust": 37,
+     "py": 131,
+     "ratio": 0.282
+    }
+   },
+   "tier2": {
+    "chunk_set": "BY-DESIGN(cdc params+digest differ)"
+   }
+  },
+  {
+   "file": "bin/hello.docx",
+   "ext": ".docx",
+   "rust_modality": "binary",
+   "rust_format": "zip",
+   "py_modality": "file",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "zip_members": "MATCH",
+    "cdc_chunks": {
+     "rust": 1,
+     "py": 1,
+     "ratio": 1.0
+    },
+    "docx_text": "PY-ONLY(rust binary lane)"
+   },
+   "tier2": {
+    "chunk_set": "BY-DESIGN(cdc params+digest differ)"
+   }
+  },
+  {
+   "file": "bin/minimal.zip",
+   "ext": ".zip",
+   "rust_modality": "binary",
+   "rust_format": "zip",
+   "py_modality": "file",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "zip_members": "MATCH",
+    "cdc_chunks": {
+     "rust": 1,
+     "py": 1,
+     "ratio": 1.0
+    }
+   },
+   "tier2": {
+    "chunk_set": "BY-DESIGN(cdc params+digest differ)"
+   }
+  },
+  {
+   "file": "bin/pack_deflated.zip",
+   "ext": ".zip",
+   "rust_modality": "binary",
+   "rust_format": "zip",
+   "py_modality": "file",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "zip_members": "MATCH",
+    "cdc_chunks": {
+     "rust": 6,
+     "py": 17,
+     "ratio": 0.353
+    }
+   },
+   "tier2": {
+    "chunk_set": "BY-DESIGN(cdc params+digest differ)"
+   }
+  },
+  {
+   "file": "bin/pack_stored.zip",
+   "ext": ".zip",
+   "rust_modality": "binary",
+   "rust_format": "zip",
+   "py_modality": "file",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "zip_members": "MATCH",
+    "cdc_chunks": {
+     "rust": 7,
+     "py": 17,
+     "ratio": 0.412
+    }
+   },
+   "tier2": {
+    "chunk_set": "BY-DESIGN(cdc params+digest differ)"
+   }
+  },
+  {
+   "file": "img/adam7_13x11_rgb.png",
+   "ext": ".png",
+   "rust_modality": "image",
+   "rust_format": "png",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 10
+   }
+  },
+  {
+   "file": "img/base_422.jpg",
+   "ext": ".jpg",
+   "rust_modality": "image",
+   "rust_format": "jpeg",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 10
+   }
+  },
+  {
+   "file": "img/base_444.jpg",
+   "ext": ".jpg",
+   "rust_modality": "image",
+   "rust_format": "jpeg",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 4
+   }
+  },
+  {
+   "file": "img/base_444.png",
+   "ext": ".png",
+   "rust_modality": "image",
+   "rust_format": "png",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 4
+   }
+  },
+  {
+   "file": "img/base_gray.jpg",
+   "ext": ".jpg",
+   "rust_modality": "image",
+   "rust_format": "jpeg",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 10
+   }
+  },
+  {
+   "file": "img/big_1200x800.png",
+   "ext": ".png",
+   "rust_modality": "image",
+   "rust_format": "png",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "BY-DESIGN(py-resize>1024)",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 4
+   }
+  },
+  {
+   "file": "img/flat.gif",
+   "ext": ".gif",
+   "rust_modality": "binary",
+   "rust_format": "gif",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "error:error: OpenCV(5.0.0) D:\\a\\opencv-python\\opencv-python\\opencv\\modules\\imgproc\\src\\resize.cp"
+   },
+   "ingest_status": "PY-N/A",
+   "tier1": "RUST-N/A",
+   "decode": {
+    "image_rgb8": "SKIP"
+   },
+   "tier2": {
+    "phash_status": "RUST-N/A"
+   }
+  },
+  {
+   "file": "img/gray16_3x2.png",
+   "ext": ".png",
+   "rust_modality": "image",
+   "rust_format": "png",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 16
+   }
+  },
+  {
+   "file": "img/p24_bottom_up.bmp",
+   "ext": ".bmp",
+   "rust_modality": "image",
+   "rust_format": "bmp",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 9
+   }
+  },
+  {
+   "file": "img/p24_top_down.bmp",
+   "ext": ".bmp",
+   "rust_modality": "image",
+   "rust_format": "bmp",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 9
+   }
+  },
+  {
+   "file": "img/p32_v5_rgb.bmp",
+   "ext": ".bmp",
+   "rust_modality": "image",
+   "rust_format": "bmp",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 9
+   }
+  },
+  {
+   "file": "img/phash_rgb8_48x40.png",
+   "ext": ".png",
+   "rust_modality": "image",
+   "rust_format": "png",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 10
+   }
+  },
+  {
+   "file": "img/prog_420.jpg",
+   "ext": ".jpg",
+   "rust_modality": "image",
+   "rust_format": "jpeg",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 4
+   }
+  },
+  {
+   "file": "img/prog_444.jpg",
+   "ext": ".jpg",
+   "rust_modality": "image",
+   "rust_format": "jpeg",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 2
+   }
+  },
+  {
+   "file": "img/prog_gray.jpg",
+   "ext": ".jpg",
+   "rust_modality": "image",
+   "rust_format": "jpeg",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 10
+   }
+  },
+  {
+   "file": "img/rgb16_3x2.png",
+   "ext": ".png",
+   "rust_modality": "image",
+   "rust_format": "png",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 27
+   }
+  },
+  {
+   "file": "img/rgba16_2x2.png",
+   "ext": ".png",
+   "rust_modality": "image",
+   "rust_format": "png",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 19
+   }
+  },
+  {
+   "file": "img/rle8.bmp",
+   "ext": ".bmp",
+   "rust_modality": "image",
+   "rust_format": "bmp",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 14
+   }
+  },
+  {
+   "file": "real/audio_a.wav",
+   "ext": ".wav",
+   "rust_modality": "audio",
+   "rust_format": "wav",
+   "py_modality": "audio",
+   "ingest": {
+    "rust": "refused:audio: unsupported: audio sample rate \u2260 44100 Hz",
+    "py": "ok"
+   },
+   "ingest_status": "RUST-N/A",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "pcm_i32": "MATCH(shl16)",
+    "pcm_mono": "MATCH(native-via-shl16)",
+    "wav_native": "MATCH"
+   },
+   "tier2": {
+    "audio_peaks": "BY-DESIGN(no shared axis)",
+    "py_keys": 0
+   }
+  },
+  {
+   "file": "real/audio_a_quiet.wav",
+   "ext": ".wav",
+   "rust_modality": "audio",
+   "rust_format": "wav",
+   "py_modality": "audio",
+   "ingest": {
+    "rust": "refused:audio: unsupported: audio sample rate \u2260 44100 Hz",
+    "py": "ok"
+   },
+   "ingest_status": "RUST-N/A",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "pcm_i32": "MATCH(shl16)",
+    "pcm_mono": "MATCH(native-via-shl16)",
+    "wav_native": "MATCH"
+   },
+   "tier2": {
+    "audio_peaks": "BY-DESIGN(no shared axis)",
+    "py_keys": 0
+   }
+  },
+  {
+   "file": "real/city_1.jpg",
+   "ext": ".jpg",
+   "rust_modality": "image",
+   "rust_format": "jpeg",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "BY-DESIGN(py-resize>1024)",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 2
+   }
+  },
+  {
+   "file": "real/img_a.png",
+   "ext": ".png",
+   "rust_modality": "image",
+   "rust_format": "png",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 0
+   }
+  },
+  {
+   "file": "real/img_b.jpg",
+   "ext": ".jpg",
+   "rust_modality": "image",
+   "rust_format": "jpeg",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 0
+   }
+  },
+  {
+   "file": "real/img_other.png",
+   "ext": ".png",
+   "rust_modality": "image",
+   "rust_format": "png",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 2
+   }
+  },
+  {
+   "file": "real/portrait_1.jpg",
+   "ext": ".jpg",
+   "rust_modality": "image",
+   "rust_format": "jpeg",
+   "py_modality": "image",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": {
+    "image_rgb8": "MATCH"
+   },
+   "tier2": {
+    "phash_cross_hamming": 0
+   }
+  },
+  {
+   "file": "real/text_a.txt",
+   "ext": ".txt",
+   "rust_modality": "text",
+   "rust_format": "unknown",
+   "py_modality": "text",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": "SKIP",
+   "tier2": {
+    "minhash_head": {
+     "rust": [
+      "06b18e4d2858dcf2",
+      "01143239129fa839",
+      "054adcd3e7f82ab8",
+      "059359db990c9ff1"
+     ],
+     "py": [
+      "0046286d38fb1037",
+      "000a8a4e8726f608",
+      "0020700b78951c1a",
+      "007d0a11c3079a20"
+     ]
+    },
+    "minhash_status": "BY-DESIGN(different perm families)"
+   }
+  },
+  {
+   "file": "real/text_a_edit.txt",
+   "ext": ".txt",
+   "rust_modality": "text",
+   "rust_format": "unknown",
+   "py_modality": "text",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": "SKIP",
+   "tier2": {
+    "minhash_head": {
+     "rust": [
+      "0111293c8fb8e178",
+      "011043f7bb37a882",
+      "02612af1384b6432",
+      "0538f87e16778ad4"
+     ],
+     "py": [
+      "0046286d38fb1037",
+      "000a8a4e8726f608",
+      "0020700b78951c1a",
+      "007d0a11c3079a20"
+     ]
+    },
+    "minhash_status": "BY-DESIGN(different perm families)"
+   }
+  },
+  {
+   "file": "real/text_b.txt",
+   "ext": ".txt",
+   "rust_modality": "text",
+   "rust_format": "unknown",
+   "py_modality": "text",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": "SKIP",
+   "tier2": {
+    "minhash_head": {
+     "rust": [
+      "001114f688981ea3",
+      "035522d5f7b5b062",
+      "07f0618f832306f6",
+      "060052aac15a08a4"
+     ],
+     "py": [
+      "00834b881a8edbe0",
+      "0018268afa922320",
+      "00d8adace445a722",
+      "00f7ea435cbb0fee"
+     ]
+    },
+    "minhash_status": "BY-DESIGN(different perm families)"
+   }
+  },
+  {
+   "file": "real/v_clip.avi",
+   "ext": ".avi",
+   "rust_modality": "binary",
+   "rust_format": "unknown",
+   "py_modality": "video",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "video_y": "SKIP"
+   },
+   "tier2": {
+    "video_chain": "BY-DESIGN(fps/grid differ)"
+   }
+  },
+  {
+   "file": "text/doc_a.txt",
+   "ext": ".txt",
+   "rust_modality": "text",
+   "rust_format": "unknown",
+   "py_modality": "text",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": "SKIP",
+   "tier2": {
+    "minhash_head": {
+     "rust": [
+      "00e36ce8dcd483ec",
+      "002b58f9cf81bd61",
+      "0249e371fa78ea9b",
+      "00ab9c3ac934caf9"
+     ],
+     "py": [
+      "000f1e184cff6692",
+      "0033692885bcf56e",
+      "001ac371fe28fe92",
+      "0016c74f9a80168e"
+     ]
+    },
+    "minhash_status": "BY-DESIGN(different perm families)"
+   }
+  },
+  {
+   "file": "text/doc_a_edit.txt",
+   "ext": ".txt",
+   "rust_modality": "text",
+   "rust_format": "unknown",
+   "py_modality": "text",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": "SKIP",
+   "tier2": {
+    "minhash_head": {
+     "rust": [
+      "00e36ce8dcd483ec",
+      "002b58f9cf81bd61",
+      "0249e371fa78ea9b",
+      "00ab9c3ac934caf9"
+     ],
+     "py": [
+      "000f1e184cff6692",
+      "0033692885bcf56e",
+      "001ac371fe28fe92",
+      "0016c74f9a80168e"
+     ]
+    },
+    "minhash_status": "BY-DESIGN(different perm families)"
+   }
+  },
+  {
+   "file": "text/doc_b.txt",
+   "ext": ".txt",
+   "rust_modality": "text",
+   "rust_format": "unknown",
+   "py_modality": "text",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": "SKIP",
+   "tier2": {
+    "minhash_head": {
+     "rust": [
+      "01adcecfd7afabe1",
+      "007135ff003b8144",
+      "0381b7d88e68b0ca",
+      "008ee61a3722d075"
+     ],
+     "py": [
+      "002455d9d3bfd222",
+      "000480e9bba33e8e",
+      "000733496f8439bf",
+      "005daf8d836babce"
+     ]
+    },
+    "minhash_status": "BY-DESIGN(different perm families)"
+   }
+  },
+  {
+   "file": "text/encrypted.pdf",
+   "ext": ".pdf",
+   "rust_modality": "text",
+   "rust_format": "pdf",
+   "py_modality": "file",
+   "ingest": {
+    "rust": "refused:text: page 0: object 6 0: unsupported: encrypted document (/Encrypt in trailer)",
+    "py": "ok"
+   },
+   "ingest_status": "RUST-N/A",
+   "tier1": "BY-DESIGN(pdf: rust=text, py=bytes)",
+   "decode": {
+    "pdf_text": "RUST-N/A"
+   },
+   "tier2": {
+    "minhash_status": "BY-DESIGN(different perm families)"
+   }
+  },
+  {
+   "file": "text/macroman.pdf",
+   "ext": ".pdf",
+   "rust_modality": "text",
+   "rust_format": "pdf",
+   "py_modality": "file",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "BY-DESIGN(pdf: rust=text, py=bytes)",
+   "decode": {
+    "pdf_text_jaccard": 1.0,
+    "pdf_text": "MATCH"
+   },
+   "tier2": {
+    "minhash_status": "BY-DESIGN(different perm families)"
+   }
+  },
+  {
+   "file": "text/objstm.pdf",
+   "ext": ".pdf",
+   "rust_modality": "text",
+   "rust_format": "pdf",
+   "py_modality": "file",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "BY-DESIGN(pdf: rust=text, py=bytes)",
+   "decode": {
+    "pdf_text_jaccard": 1.0,
+    "pdf_text": "CLOSE",
+    "pdf_text_bytes": {
+     "rust": 21,
+     "py": 21
+    }
+   },
+   "tier2": {
+    "minhash_status": "BY-DESIGN(different perm families)"
+   }
+  },
+  {
+   "file": "text/prose.txt",
+   "ext": ".txt",
+   "rust_modality": "text",
+   "rust_format": "unknown",
+   "py_modality": "text",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": "SKIP",
+   "tier2": {
+    "minhash_head": {
+     "rust": [
+      "04cf73bf9d43ccef",
+      "005908516233326d",
+      "01ae75d4b9c923e1",
+      "01b6c84a8f8aebcc"
+     ],
+     "py": [
+      "006a313da700fb15",
+      "006f2be51888318b",
+      "006ec2ff7c60f2b2",
+      "002b1f52deaacb75"
+     ]
+    },
+    "minhash_status": "BY-DESIGN(different perm families)"
+   }
+  },
+  {
+   "file": "text/punct_tags.txt",
+   "ext": ".txt",
+   "rust_modality": "text",
+   "rust_format": "unknown",
+   "py_modality": "text",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": "SKIP",
+   "tier2": {
+    "minhash_head": {
+     "rust": [
+      "1fa62f5d462e6244",
+      "1c5868a4b35434ab",
+      "09186853edddea85",
+      "15d4d2ec91e6a72f"
+     ],
+     "py": [
+      "018ac74e5eae4a87",
+      "01f063223fc67d69",
+      "0051d0926d3e7099",
+      "01ec8bd88ad1924d"
+     ]
+    },
+    "minhash_status": "BY-DESIGN(different perm families)"
+   }
+  },
+  {
+   "file": "text/short_two.txt",
+   "ext": ".txt",
+   "rust_modality": "text",
+   "rust_format": "unknown",
+   "py_modality": "text",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": "SKIP",
+   "tier2": {
+    "minhash_head": {
+     "rust": [
+      "894b774d932fb23a",
+      "c838b08f4545f3e7",
+      "a73eb1fc18d5e903",
+      "a6a0a8d324a3fff0"
+     ],
+     "py": [
+      "1955f6d8fbd8c7b3",
+      "1519d6689a70bde0",
+      "1f5ff9bf22bd507a",
+      "0df669560b55489f"
+     ]
+    },
+    "minhash_status": "BY-DESIGN(different perm families)"
+   }
+  },
+  {
+   "file": "text/standard_default.pdf",
+   "ext": ".pdf",
+   "rust_modality": "text",
+   "rust_format": "pdf",
+   "py_modality": "file",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "BY-DESIGN(pdf: rust=text, py=bytes)",
+   "decode": {
+    "pdf_text_jaccard": 1.0,
+    "pdf_text": "MATCH"
+   },
+   "tier2": {
+    "minhash_status": "BY-DESIGN(different perm families)"
+   }
+  },
+  {
+   "file": "text/text_page.pdf",
+   "ext": ".pdf",
+   "rust_modality": "text",
+   "rust_format": "pdf",
+   "py_modality": "file",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "BY-DESIGN(pdf: rust=text, py=bytes)",
+   "decode": {
+    "pdf_text_jaccard": 1.0,
+    "pdf_text": "MATCH"
+   },
+   "tier2": {
+    "minhash_status": "BY-DESIGN(different perm families)"
+   }
+  },
+  {
+   "file": "text/tounicode_bfrange.pdf",
+   "ext": ".pdf",
+   "rust_modality": "text",
+   "rust_format": "pdf",
+   "py_modality": "file",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "BY-DESIGN(pdf: rust=text, py=bytes)",
+   "decode": {
+    "pdf_text_jaccard": 1.0,
+    "pdf_text": "MATCH"
+   },
+   "tier2": {
+    "minhash_status": "BY-DESIGN(different perm families)"
+   }
+  },
+  {
+   "file": "text/vi_nfc.txt",
+   "ext": ".txt",
+   "rust_modality": "text",
+   "rust_format": "unknown",
+   "py_modality": "text",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": "SKIP",
+   "tier2": {
+    "minhash_head": {
+     "rust": [
+      "1665173b7a6441c5",
+      "27fe74da8b9e7412",
+      "02a50474f988cd96",
+      "2d06cc6b8b509d17"
+     ],
+     "py": [
+      "007149b400c7f6c3",
+      "026a44c57ef63ef3",
+      "0428b9dea1ee51d2",
+      "01a1c9f2a7d100e7"
+     ]
+    },
+    "minhash_status": "BY-DESIGN(different perm families)"
+   }
+  },
+  {
+   "file": "text/vi_nfd.txt",
+   "ext": ".txt",
+   "rust_modality": "text",
+   "rust_format": "unknown",
+   "py_modality": "text",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "MATCH",
+   "decode": "SKIP",
+   "tier2": {
+    "minhash_head": {
+     "rust": [
+      "1665173b7a6441c5",
+      "27fe74da8b9e7412",
+      "02a50474f988cd96",
+      "2d06cc6b8b509d17"
+     ],
+     "py": [
+      "007149b400c7f6c3",
+      "026a44c57ef63ef3",
+      "0428b9dea1ee51d2",
+      "01a1c9f2a7d100e7"
+     ]
+    },
+    "minhash_status": "BY-DESIGN(different perm families)"
+   }
+  },
+  {
+   "file": "video/a_128x96.mp4",
+   "ext": ".mp4",
+   "rust_modality": "video",
+   "rust_format": "mp4",
+   "py_modality": "video",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "video_y": "MATCH",
+    "frames": [
+     {
+      "i": 0,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 1,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 2,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 3,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 4,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 5,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 6,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 7,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 8,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 9,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 10,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 11,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 12,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 13,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 14,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 15,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 16,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 17,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 18,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 19,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 20,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 21,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 22,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 23,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 24,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 25,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 26,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 27,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 28,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 29,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 30,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 31,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     }
+    ],
+    "phash_mirror_video": "MATCH"
+   },
+   "tier2": {
+    "video_chain": "BY-DESIGN(fps/grid differ)"
+   }
+  },
+  {
+   "file": "video/a_64x48.mov",
+   "ext": ".mov",
+   "rust_modality": "video",
+   "rust_format": "mp4",
+   "py_modality": "video",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "video_y": "MATCH",
+    "frames": [
+     {
+      "i": 0,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 1,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 2,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 3,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 4,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 5,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 6,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 7,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 8,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 9,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 10,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 11,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 12,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 13,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 14,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 15,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 16,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 17,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 18,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 19,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 20,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 21,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 22,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 23,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 24,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 25,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 26,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 27,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 28,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 29,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 30,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 31,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     }
+    ],
+    "phash_mirror_video": "MATCH"
+   },
+   "tier2": {
+    "video_chain": "BY-DESIGN(fps/grid differ)"
+   }
+  },
+  {
+   "file": "video/a_64x48.mp4",
+   "ext": ".mp4",
+   "rust_modality": "video",
+   "rust_format": "mp4",
+   "py_modality": "video",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "video_y": "MATCH",
+    "frames": [
+     {
+      "i": 0,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 1,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 2,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 3,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 4,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 5,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 6,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 7,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 8,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 9,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 10,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 11,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 12,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 13,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 14,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 15,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 16,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 17,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 18,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 19,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 20,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 21,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 22,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 23,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 24,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 25,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 26,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 27,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 28,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 29,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 30,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 31,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     }
+    ],
+    "phash_mirror_video": "MATCH"
+   },
+   "tier2": {
+    "video_chain": "BY-DESIGN(fps/grid differ)"
+   }
+  },
+  {
+   "file": "video/a_crf40.mp4",
+   "ext": ".mp4",
+   "rust_modality": "video",
+   "rust_format": "mp4",
+   "py_modality": "video",
+   "ingest": {
+    "rust": "ok",
+    "py": "ok"
+   },
+   "ingest_status": "BOTH",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "video_y": "MATCH",
+    "frames": [
+     {
+      "i": 0,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 1,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 2,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 3,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 4,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 5,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 6,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 7,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 8,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 9,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 10,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 11,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 12,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 13,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 14,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 15,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 16,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 17,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 18,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 19,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 20,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 21,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 22,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 23,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 24,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 25,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 26,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 27,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 28,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 29,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 30,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 31,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     }
+    ],
+    "phash_mirror_video": "MATCH"
+   },
+   "tier2": {
+    "video_chain": "BY-DESIGN(fps/grid differ)"
+   }
+  },
+  {
+   "file": "video/a_frag.mp4",
+   "ext": ".mp4",
+   "rust_modality": "video",
+   "rust_format": "mp4",
+   "py_modality": "video",
+   "ingest": {
+    "rust": "refused:video: unsupported: fragmented mp4 (moof)",
+    "py": "ok"
+   },
+   "ingest_status": "RUST-N/A",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "video_y": "RUST-N/A"
+   },
+   "tier2": {
+    "video_chain": "BY-DESIGN(fps/grid differ)"
+   }
+  },
+  {
+   "file": "video/audioonly.mp4",
+   "ext": ".mp4",
+   "rust_modality": "video",
+   "rust_format": "mp4",
+   "ingest": {
+    "rust": "refused:video: bad value: mp4 has no video track",
+    "py": "no-dump"
+   },
+   "ingest_status": "NEITHER",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "video_y": "RUST-N/A"
+   },
+   "tier2": {
+    "video_chain": "BY-DESIGN(fps/grid differ)"
+   }
+  },
+  {
+   "file": "video/b_64x48.mp4",
+   "ext": ".mp4",
+   "rust_modality": "video",
+   "rust_format": "mp4",
+   "ingest": {
+    "rust": "ok",
+    "py": "no-dump"
+   },
+   "ingest_status": "PY-N/A",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "video_y": "MATCH",
+    "frames": [
+     {
+      "i": 0,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 1,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 2,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 3,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 4,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 5,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 6,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 7,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 8,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 9,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 10,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 11,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 12,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 13,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 14,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 15,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 16,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 17,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 18,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 19,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 20,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 21,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 22,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 23,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 24,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 25,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 26,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 27,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 28,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 29,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 30,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     },
+     {
+      "i": 31,
+      "y_eq_ffmpeg": true,
+      "phash_eq_mirror": true
+     }
+    ],
+    "phash_mirror_video": "MATCH"
+   },
+   "tier2": {
+    "video_chain": "BY-DESIGN(fps/grid differ)"
+   }
+  },
+  {
+   "file": "video/e_mp4v.mp4",
+   "ext": ".mp4",
+   "rust_modality": "video",
+   "rust_format": "mp4",
+   "ingest": {
+    "rust": "refused:video: unsupported: video codec MPEG-4 part 2",
+    "py": "no-dump"
+   },
+   "ingest_status": "NEITHER",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "video_y": "RUST-N/A"
+   },
+   "tier2": {
+    "video_chain": "BY-DESIGN(fps/grid differ)"
+   }
+  },
+  {
+   "file": "video/high_64x48.mp4",
+   "ext": ".mp4",
+   "rust_modality": "video",
+   "rust_format": "mp4",
+   "ingest": {
+    "rust": "refused:video: unsupported: h264 profile: High",
+    "py": "no-dump"
+   },
+   "ingest_status": "NEITHER",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "video_y": "RUST-N/A"
+   },
+   "tier2": {
+    "video_chain": "BY-DESIGN(fps/grid differ)"
+   }
+  },
+  {
+   "file": "video/minimal.mp4",
+   "ext": ".mp4",
+   "rust_modality": "video",
+   "rust_format": "mp4",
+   "ingest": {
+    "rust": "refused:video: truncated: ue(v) prefix",
+    "py": "no-dump"
+   },
+   "ingest_status": "NEITHER",
+   "tier1": "BY-DESIGN(canonical differs)",
+   "decode": {
+    "video_y": "RUST-N/A"
+   },
+   "tier2": {
+    "video_chain": "BY-DESIGN(fps/grid differ)"
+   }
+  }
+ ],
+ "pairs": [
+  {
+   "a": "audio/l3_short.mp3",
+   "b": "audio/l3_mono.mp3",
+   "rust": {
+    "matched": false,
+    "score": "votes=2 delta_t=-5",
+    "distance": 4294967293,
+    "error": null,
+    "modality": "audio"
+   },
+   "py": {
+    "kind": "different",
+    "score": 1.0,
+    "hamming_py": null,
+    "jaccard_est_py": null,
+    "jaccard_exact_py": null,
+    "video_py": null,
+    "error": null
+   },
+   "agree": "YES"
+  },
+  {
+   "a": "audio/stereo_441.wav",
+   "b": "audio/stereo_441.wav",
+   "rust": {
+    "matched": true,
+    "score": "votes=44 delta_t=0",
+    "distance": 4294967251,
+    "error": null,
+    "modality": "audio"
+   },
+   "py": {
+    "kind": "exact",
+    "score": 0.0,
+    "hamming_py": null,
+    "jaccard_est_py": null,
+    "jaccard_exact_py": null,
+    "video_py": null,
+    "error": null
+   },
+   "agree": "YES"
+  },
+  {
+   "a": "audio/tone.wav",
+   "b": "audio/tone.flac",
+   "rust": {
+    "matched": true,
+    "score": "votes=99 delta_t=0",
+    "distance": 4294967196,
+    "error": null,
+    "modality": "audio"
+   },
+   "py": {
+    "kind": "exact",
+    "score": 0.0,
+    "hamming_py": null,
+    "jaccard_est_py": null,
+    "jaccard_exact_py": null,
+    "video_py": null,
+    "error": null
+   },
+   "agree": "YES"
+  },
+  {
+   "a": "bin/f_a.bin",
+   "b": "bin/f_copy.bin",
+   "rust": {
+    "matched": true,
+    "score": "jaccard=1.000000",
+    "distance": 0,
+    "error": null,
+    "modality": "binary"
+   },
+   "py": {
+    "kind": "exact",
+    "score": 0.0,
+    "hamming_py": null,
+    "jaccard_est_py": 1.0,
+    "jaccard_exact_py": 1.0,
+    "video_py": null,
+    "error": null
+   },
+   "agree": "YES"
+  },
+  {
+   "a": "bin/f_a.bin",
+   "b": "bin/f_mod.bin",
+   "rust": {
+    "matched": true,
+    "score": "jaccard=0.953488",
+    "distance": 46512,
+    "error": null,
+    "modality": "binary"
+   },
+   "py": {
+    "kind": "near",
+    "score": 0.9865771812080537,
+    "hamming_py": null,
+    "jaccard_est_py": 0.9765625,
+    "jaccard_exact_py": 0.9865771812080537,
+    "video_py": null,
+    "error": null
+   },
+   "agree": "YES"
+  },
+  {
+   "a": "bin/f_a.bin",
+   "b": "bin/f_other.bin",
+   "rust": {
+    "matched": false,
+    "score": "jaccard=0.000000",
+    "distance": 1000000,
+    "error": null,
+    "modality": "binary"
+   },
+   "py": {
+    "kind": "different",
+    "score": 0.0,
+    "hamming_py": null,
+    "jaccard_est_py": 0.0,
+    "jaccard_exact_py": 0.0,
+    "video_py": null,
+    "error": null
+   },
+   "agree": "YES"
+  },
+  {
+   "a": "bin/f_a.bin",
+   "b": "bin/f_tail.bin",
+   "rust": {
+    "matched": true,
+    "score": "jaccard=0.837209",
+    "distance": 162791,
+    "error": null,
+    "modality": "binary"
+   },
+   "py": {
+    "kind": "maybe",
+    "score": 0.87248322147651,
+    "hamming_py": null,
+    "jaccard_est_py": 0.9140625,
+    "jaccard_exact_py": 0.87248322147651,
+    "video_py": null,
+    "error": null
+   },
+   "agree": "YES"
+  },
+  {
+   "a": "bin/pack_stored.zip",
+   "b": "bin/pack_deflated.zip",
+   "rust": {
+    "matched": false,
+    "score": "jaccard=0.083333",
+    "distance": 916667,
+    "error": null,
+    "modality": "binary"
+   },
+   "py": {
+    "kind": "near",
+    "score": 1.0,
+    "hamming_py": null,
+    "jaccard_est_py": 0.703125,
+    "jaccard_exact_py": 0.6190476190476191,
+    "video_py": null,
+    "error": null
+   },
+   "agree": "NO"
+  },
+  {
+   "a": "img/base_444.png",
+   "b": "img/base_444.jpg",
+   "rust": {
+    "matched": true,
+    "score": "hamming=0",
+    "distance": 0,
+    "error": null,
+    "modality": "image"
+   },
+   "py": {
+    "kind": "exact",
+    "score": 0.0,
+    "hamming_py": 0,
+    "jaccard_est_py": null,
+    "jaccard_exact_py": null,
+    "video_py": null,
+    "error": null
+   },
+   "agree": "YES"
+  },
+  {
+   "a": "img/p24_top_down.bmp",
+   "b": "img/p24_bottom_up.bmp",
+   "rust": {
+    "matched": true,
+    "score": "hamming=0",
+    "distance": 0,
+    "error": null,
+    "modality": "image"
+   },
+   "py": {
+    "kind": "exact",
+    "score": 0.0,
+    "hamming_py": 0,
+    "jaccard_est_py": null,
+    "jaccard_exact_py": null,
+    "video_py": null,
+    "error": null
+   },
+   "agree": "YES"
+  },
+  {
+   "a": "real/audio_a.wav",
+   "b": "real/audio_a_quiet.wav",
+   "rust": {
+    "matched": null,
+    "score": null,
+    "distance": null,
+    "error": "modhash match: C:\\Users\\n24q02m-wpc\\projects\\modhash-wt-diff\\lab\\differential\\corpus\\real\\audio_a.wav: audio: unsupported: audio sample rate \u00e2\u2030\u00a0 44100 Hz\nmodhash match: C:\\Users\\n24q02m-wpc\\projects\\modhash-wt-diff\\lab\\differential\\corpus\\real\\audio_a_quiet.wav: audio: unsupported: audio sample rate",
+    "modality": null
+   },
+   "py": {
+    "kind": "near",
+    "score": 0.9553903345724907,
+    "hamming_py": null,
+    "jaccard_est_py": null,
+    "jaccard_exact_py": null,
+    "video_py": null,
+    "error": null
+   },
+   "agree": "n/a"
+  },
+  {
+   "a": "real/img_a.png",
+   "b": "real/img_b.jpg",
+   "rust": {
+    "matched": true,
+    "score": "hamming=0",
+    "distance": 0,
+    "error": null,
+    "modality": "image"
+   },
+   "py": {
+    "kind": "near",
+    "score": 0.0,
+    "hamming_py": 0,
+    "jaccard_est_py": null,
+    "jaccard_exact_py": null,
+    "video_py": null,
+    "error": null
+   },
+   "agree": "YES"
+  },
+  {
+   "a": "real/img_a.png",
+   "b": "real/img_other.png",
+   "rust": {
+    "matched": false,
+    "score": "hamming=32",
+    "distance": 32,
+    "error": null,
+    "modality": "image"
+   },
+   "py": {
+    "kind": "different",
+    "score": 1.0,
+    "hamming_py": 34,
+    "jaccard_est_py": null,
+    "jaccard_exact_py": null,
+    "video_py": null,
+    "error": null
+   },
+   "agree": "YES"
+  },
+  {
+   "a": "real/text_a.txt",
+   "b": "real/text_a_edit.txt",
+   "rust": {
+    "matched": true,
+    "score": "jaccard=0.820312",
+    "distance": 179688,
+    "error": null,
+    "modality": "text"
+   },
+   "py": {
+    "kind": "maybe",
+    "score": 0.7982456140350878,
+    "hamming_py": null,
+    "jaccard_est_py": 0.8046875,
+    "jaccard_exact_py": 0.7982456140350878,
+    "video_py": null,
+    "error": null
+   },
+   "agree": "YES"
+  },
+  {
+   "a": "real/text_a.txt",
+   "b": "real/text_b.txt",
+   "rust": {
+    "matched": false,
+    "score": "jaccard=0.000000",
+    "distance": 1000000,
+    "error": null,
+    "modality": "text"
+   },
+   "py": {
+    "kind": "different",
+    "score": 0.0,
+    "hamming_py": null,
+    "jaccard_est_py": 0.0,
+    "jaccard_exact_py": 0.0,
+    "video_py": null,
+    "error": null
+   },
+   "agree": "YES"
+  },
+  {
+   "a": "text/doc_a.txt",
+   "b": "text/doc_a_edit.txt",
+   "rust": {
+    "matched": true,
+    "score": "jaccard=0.984375",
+    "distance": 15625,
+    "error": null,
+    "modality": "text"
+   },
+   "py": {
+    "kind": "near",
+    "score": 0.9538461538461539,
+    "hamming_py": null,
+    "jaccard_est_py": 0.9609375,
+    "jaccard_exact_py": 0.9538461538461539,
+    "video_py": null,
+    "error": null
+   },
+   "agree": "YES"
+  },
+  {
+   "a": "text/doc_a.txt",
+   "b": "text/doc_b.txt",
+   "rust": {
+    "matched": false,
+    "score": "jaccard=0.000000",
+    "distance": 1000000,
+    "error": null,
+    "modality": "text"
+   },
+   "py": {
+    "kind": "different",
+    "score": 0.0,
+    "hamming_py": null,
+    "jaccard_est_py": 0.0,
+    "jaccard_exact_py": 0.0,
+    "video_py": null,
+    "error": null
+   },
+   "agree": "YES"
+  },
+  {
+   "a": "text/text_page.pdf",
+   "b": "text/standard_default.pdf",
+   "rust": {
+    "matched": true,
+    "score": "jaccard=1.000000",
+    "distance": 0,
+    "error": null,
+    "modality": "text"
+   },
+   "py": {
+    "kind": "exact",
+    "score": 0.0,
+    "hamming_py": null,
+    "jaccard_est_py": 1.0,
+    "jaccard_exact_py": 1.0,
+    "video_py": null,
+    "error": null
+   },
+   "agree": "YES"
+  },
+  {
+   "a": "text/vi_nfc.txt",
+   "b": "text/vi_nfd.txt",
+   "rust": {
+    "matched": true,
+    "score": "jaccard=1.000000",
+    "distance": 0,
+    "error": null,
+    "modality": "text"
+   },
+   "py": {
+    "kind": "exact",
+    "score": 0.0,
+    "hamming_py": null,
+    "jaccard_est_py": 1.0,
+    "jaccard_exact_py": 1.0,
+    "video_py": null,
+    "error": null
+   },
+   "agree": "YES"
+  },
+  {
+   "a": "video/a_64x48.mp4",
+   "b": "video/a_128x96.mp4",
+   "rust": {
+    "matched": true,
+    "score": "frames=1.000000 minhash=0.000000",
+    "distance": 0,
+    "error": null,
+    "modality": "video"
+   },
+   "py": {
+    "kind": "near",
+    "score": 1.0,
+    "hamming_py": null,
+    "jaccard_est_py": null,
+    "jaccard_exact_py": null,
+    "video_py": {
+     "ratio": 1.0,
+     "offset": 0,
+     "mean_dist": 1.25,
+     "matched": 32,
+     "coverage": 1.0,
+     "speed": 1.0
+    },
+    "error": null
+   },
+   "agree": "YES"
+  },
+  {
+   "a": "video/a_64x48.mp4",
+   "b": "video/a_64x48.mov",
+   "rust": {
+    "matched": true,
+    "score": "frames=1.000000 minhash=1.000000",
+    "distance": 0,
+    "error": null,
+    "modality": "video"
+   },
+   "py": {
+    "kind": "exact",
+    "score": 0.0,
+    "hamming_py": null,
+    "jaccard_est_py": null,
+    "jaccard_exact_py": null,
+    "video_py": {
+     "ratio": 1.0,
+     "offset": 0,
+     "mean_dist": 0.0,
+     "matched": 32,
+     "coverage": 1.0,
+     "speed": 1.0
+    },
+    "error": null
+   },
+   "agree": "YES"
+  },
+  {
+   "a": "video/a_64x48.mp4",
+   "b": "video/a_crf40.mp4",
+   "rust": {
+    "matched": true,
+    "score": "frames=1.000000 minhash=0.000000",
+    "distance": 0,
+    "error": null,
+    "modality": "video"
+   },
+   "py": {
+    "kind": "near",
+    "score": 1.0,
+    "hamming_py": null,
+    "jaccard_est_py": null,
+    "jaccard_exact_py": null,
+    "video_py": {
+     "ratio": 1.0,
+     "offset": 0,
+     "mean_dist": 4.75,
+     "matched": 32,
+     "coverage": 1.0,
+     "speed": 1.0
+    },
+    "error": null
+   },
+   "agree": "YES"
+  },
+  {
+   "a": "video/a_64x48.mp4",
+   "b": "video/b_64x48.mp4",
+   "rust": {
+    "matched": false,
+    "score": "frames=0.000000 minhash=0.000000",
+    "distance": 1000000,
+    "error": null,
+    "modality": "video"
+   },
+   "py": {
+    "kind": "different",
+    "score": 0.0,
+    "hamming_py": null,
+    "jaccard_est_py": null,
+    "jaccard_exact_py": null,
+    "video_py": {
+     "ratio": 0.0,
+     "offset": 8,
+     "mean_dist": 29.75,
+     "matched": 0,
+     "coverage": 0.0,
+     "speed": 1.0
+    },
+    "error": null
+   },
+   "agree": "YES"
+  }
+ ]
+}
