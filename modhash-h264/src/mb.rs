@@ -12,8 +12,8 @@
 
 use modhash_primitives::{Error, Result};
 
-/// Parsed `mb_type` semantics, covering every baseline P- and I-slice
-/// code (spec Tables 7-11, 7-13, 7-14).
+/// Parsed `mb_type` semantics, covering every P-, B- and I-slice code
+/// (spec Tables 7-11, 7-13, 7-14, 7-15, 7-17, 7-18).
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum MbType {
     /// I_NxN: sixteen 4x4 intra predictions.
@@ -42,6 +42,26 @@ pub(crate) enum MbType {
     P8x8Ref0,
     /// P_Skip (never parsed as an mb_type; produced by the skip run).
     PSkip,
+    /// B_Direct_16x16: direct prediction over the whole MB.
+    BDirect,
+    /// B_L0_16x16 / B_L1_16x16 / B_Bi_16x16: one partition, `dirs` is
+    /// bit0 = L0-predicted, bit1 = L1-predicted.
+    B16x16 {
+        /// Prediction directions used: bit0 = L0, bit1 = L1.
+        dirs: u8,
+    },
+    /// Two-partition B macroblock (codes 4..21 of Table 7-15): two
+    /// parts, each `(w4, h4, dirs)` on the 4x4-block grid.
+    BPart {
+        /// Partition 0: `(w4, h4, dirs)`.
+        p0: (u8, u8, u8),
+        /// Partition 1: `(w4, h4, dirs)`.
+        p1: (u8, u8, u8),
+    },
+    /// B_8x8 (code 22): per-8x8 `sub_mb_type` semantics.
+    B8x8,
+    /// B_Skip (never parsed as an mb_type; produced by the skip run).
+    BSkip,
 }
 
 impl MbType {
@@ -82,10 +102,48 @@ impl MbType {
             _ => Err(Error::BadValue("P-slice mb_type over 30")),
         }
     }
+
+    /// Decodes a B-slice `mb_type` code number (spec Table 7-15): codes
+    /// 0..22 are inter, 23..48 are the I-slice table shifted by 23.
+    /// `dirs` is bit0 = L0-predicted, bit1 = L1-predicted (3 = both,
+    /// written `Bi` in the spec names).
+    pub(crate) fn b_slice(code: u32) -> Result<MbType> {
+        match code {
+            0 => Ok(MbType::BDirect),
+            1 => Ok(MbType::B16x16 { dirs: 1 }),
+            2 => Ok(MbType::B16x16 { dirs: 2 }),
+            3 => Ok(MbType::B16x16 { dirs: 3 }),
+            // Two-partition codes: geometry first (16x8 = 4x2 or
+            // 8x16 = 2x4 blocks), then the direction pair in Table
+            // 7-15's listed order.
+            4 => Ok(MbType::BPart { p0: (4, 2, 1), p1: (4, 2, 1) }),
+            5 => Ok(MbType::BPart { p0: (2, 4, 1), p1: (2, 4, 1) }),
+            6 => Ok(MbType::BPart { p0: (4, 2, 2), p1: (4, 2, 2) }),
+            7 => Ok(MbType::BPart { p0: (2, 4, 2), p1: (2, 4, 2) }),
+            8 => Ok(MbType::BPart { p0: (4, 2, 3), p1: (4, 2, 1) }),
+            9 => Ok(MbType::BPart { p0: (2, 4, 3), p1: (2, 4, 1) }),
+            10 => Ok(MbType::BPart { p0: (4, 2, 2), p1: (4, 2, 1) }),
+            11 => Ok(MbType::BPart { p0: (2, 4, 2), p1: (2, 4, 1) }),
+            12 => Ok(MbType::BPart { p0: (4, 2, 1), p1: (4, 2, 3) }),
+            13 => Ok(MbType::BPart { p0: (2, 4, 1), p1: (2, 4, 3) }),
+            14 => Ok(MbType::BPart { p0: (4, 2, 2), p1: (4, 2, 3) }),
+            15 => Ok(MbType::BPart { p0: (2, 4, 2), p1: (2, 4, 3) }),
+            16 => Ok(MbType::BPart { p0: (4, 2, 3), p1: (4, 2, 2) }),
+            17 => Ok(MbType::BPart { p0: (2, 4, 3), p1: (2, 4, 2) }),
+            18 => Ok(MbType::BPart { p0: (4, 2, 1), p1: (4, 2, 2) }),
+            19 => Ok(MbType::BPart { p0: (2, 4, 1), p1: (2, 4, 2) }),
+            20 => Ok(MbType::BPart { p0: (4, 2, 3), p1: (4, 2, 3) }),
+            21 => Ok(MbType::BPart { p0: (2, 4, 3), p1: (2, 4, 3) }),
+            22 => Ok(MbType::B8x8),
+            23..=48 => MbType::i_slice(code - 23),
+            _ => Err(Error::BadValue("B-slice mb_type over 48")),
+        }
+    }
 }
 
-/// P_8x8 sub-macroblock types (spec Table 7-17): `code` is the
-/// `sub_mb_type` syntax value.
+/// Sub-macroblock types: P_8x8's four codes (spec Table 7-17) and
+/// B_8x8's thirteen (Table 7-18). For B types `dirs` is bit0 = L0,
+/// bit1 = L1; `BDirect` is `B_Direct_8x8`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum SubMbType {
     /// P_L0_8x8.
@@ -96,10 +154,24 @@ pub(crate) enum SubMbType {
     S4x8,
     /// P_L0_4x4.
     S4x4,
+    /// B_Direct_8x8.
+    BDirect,
+    /// B inter sub-mb: `w4`/`h4` are sub-partition size in 4x4 units,
+    /// `nparts` the partition count, `dirs` the direction bits.
+    BInter {
+        /// Sub-partition width in 4x4 units.
+        w4: u8,
+        /// Sub-partition height in 4x4 units.
+        h4: u8,
+        /// Partition count (1, 2 or 4).
+        nparts: u8,
+        /// Direction bits: bit0 = L0, bit1 = L1.
+        dirs: u8,
+    },
 }
 
 impl SubMbType {
-    /// Decodes the `sub_mb_type` code (0..=3).
+    /// Decodes the P-slice `sub_mb_type` code (0..=3, spec Table 7-17).
     pub(crate) fn from_code(code: u32) -> Result<SubMbType> {
         match code {
             0 => Ok(SubMbType::S8x8),
@@ -110,13 +182,43 @@ impl SubMbType {
         }
     }
 
-    /// `(w, h)` of each sub-partition in luma samples, and the count.
+    /// Decodes the B-slice `sub_mb_type` code (0..=12, Table 7-18).
+    pub(crate) fn from_code_b(code: u32) -> Result<SubMbType> {
+        match code {
+            0 => Ok(SubMbType::BDirect),
+            1 => Ok(SubMbType::BInter { w4: 2, h4: 2, nparts: 1, dirs: 1 }),
+            2 => Ok(SubMbType::BInter { w4: 2, h4: 2, nparts: 1, dirs: 2 }),
+            3 => Ok(SubMbType::BInter { w4: 2, h4: 2, nparts: 1, dirs: 3 }),
+            4 => Ok(SubMbType::BInter { w4: 2, h4: 1, nparts: 2, dirs: 1 }),
+            5 => Ok(SubMbType::BInter { w4: 1, h4: 2, nparts: 2, dirs: 1 }),
+            6 => Ok(SubMbType::BInter { w4: 2, h4: 1, nparts: 2, dirs: 2 }),
+            7 => Ok(SubMbType::BInter { w4: 1, h4: 2, nparts: 2, dirs: 2 }),
+            8 => Ok(SubMbType::BInter { w4: 2, h4: 1, nparts: 2, dirs: 3 }),
+            9 => Ok(SubMbType::BInter { w4: 1, h4: 2, nparts: 2, dirs: 3 }),
+            10 => Ok(SubMbType::BInter { w4: 1, h4: 1, nparts: 4, dirs: 1 }),
+            11 => Ok(SubMbType::BInter { w4: 1, h4: 1, nparts: 4, dirs: 2 }),
+            12 => Ok(SubMbType::BInter { w4: 1, h4: 1, nparts: 4, dirs: 3 }),
+            _ => Err(Error::BadValue("B sub_mb_type over 12")),
+        }
+    }
+
+    /// `(w4, h4)` of each sub-partition in 4x4 units, and the count.
+    /// For `BDirect` this returns the single whole-8x8 partition; the
+    /// decoder may split it into 4x4 under `direct_8x8_inference`.
     pub(crate) fn parts(self) -> ([(u8, u8); 4], usize) {
         match self {
-            SubMbType::S8x8 => ([(8, 8), (0, 0), (0, 0), (0, 0)], 1),
-            SubMbType::S8x4 => ([(8, 4), (8, 4), (0, 0), (0, 0)], 2),
-            SubMbType::S4x8 => ([(4, 8), (4, 8), (0, 0), (0, 0)], 2),
-            SubMbType::S4x4 => ([(4, 4); 4], 4),
+            SubMbType::S8x8 => ([(2, 2), (0, 0), (0, 0), (0, 0)], 1),
+            SubMbType::S8x4 => ([(2, 1), (2, 1), (0, 0), (0, 0)], 2),
+            SubMbType::S4x8 => ([(1, 2), (1, 2), (0, 0), (0, 0)], 2),
+            SubMbType::S4x4 => ([(1, 1); 4], 4),
+            SubMbType::BDirect => ([(2, 2); 4], 1),
+            SubMbType::BInter { w4, h4, nparts, .. } => {
+                let mut p = [(0u8, 0u8); 4];
+                for e in p.iter_mut().take(nparts as usize) {
+                    *e = (w4, h4);
+                }
+                (p, nparts as usize)
+            }
         }
     }
 }
@@ -144,15 +246,36 @@ pub(crate) struct MbState {
     /// `total_coeff` per 4x4 luma block (group-major, 24 entries cover
     /// 16 luma + 8 chroma AC, in the same group-major order for the
     /// chroma 8x8 pair) — used by `nC` prediction and deblocking.
+    /// Under `transform_size_8x8` each 8x8 group's four entries all
+    /// carry the 8x8 `TotalCoeff` (spec 8.7.2.1's per-8x8 `nz` view).
     pub nz: [u8; 24],
-    /// Luma motion vectors per 4x4 block (quarter-pel units).
+    /// Luma motion vectors per 4x4 block for list L0 (quarter-pel).
     pub mv: [[i16; 2]; 16],
-    /// `ref_idx_l0` per 4x4 block (0xff = not inter-coded).
+    /// `ref_idx_l0` per 4x4 block (0xff = not used on this list).
     pub ref_idx: [u8; 16],
+    /// Luma motion vectors per 4x4 block for list L1 (B slices).
+    pub mv_l1: [[i16; 2]; 16],
+    /// `ref_idx_l1` per 4x4 block (0xff = unused).
+    pub ref_idx_l1: [u8; 16],
     /// Parsed intra-4x4 modes (raster order), 0..8 or 0xff unset.
     pub i4x4_modes: [u8; 16],
     /// `intra_chroma_pred_mode` 0..=3.
     pub chroma_pred: u8,
+    /// `mb_skip_flag` (P_Skip or B_Skip; `BDirect` does NOT count as
+    /// skipped for the CABAC `mb_skip_flag` context derivation).
+    pub skip: bool,
+    /// `transform_size_8x8_flag` of this macroblock.
+    pub transform8x8: bool,
+    /// `CodedBlockPatternLuma` (4 bits) + `CodedBlockPatternChroma`
+    /// (2 bits) as parsed: `cbp = chroma<<4 | luma` — the CABAC
+    /// `coded_block_pattern` context and ffmpeg's `cbp_table` layout.
+    pub cbp: u8,
+    /// Coded-DC flags: bit0 = luma DC coded (i16x16 MB), bit1 = Cb DC,
+    /// bit2 = Cr DC — feeds the cat-0/3 `coded_block_flag` contexts.
+    pub dc_coded: u8,
+    /// `direct_spatial_mv_pred` in effect for this MB's direct blocks
+    /// (0 = temporal) — the CABAC `direct_flag` context.
+    pub direct_spatial: bool,
 }
 
 impl MbState {
@@ -169,8 +292,15 @@ impl MbState {
             nz: [0; 24],
             mv: [[0; 2]; 16],
             ref_idx: [0xff; 16],
+            mv_l1: [[0; 2]; 16],
+            ref_idx_l1: [0xff; 16],
             i4x4_modes: [0xff; 16],
             chroma_pred: 0,
+            skip: false,
+            transform8x8: false,
+            cbp: 0,
+            dc_coded: 0,
+            direct_spatial: false,
         }
     }
 }

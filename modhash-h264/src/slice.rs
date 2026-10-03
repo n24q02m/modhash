@@ -14,6 +14,8 @@ pub(crate) enum SliceType {
     P,
     /// I slice (codes 2 and 7) — and the "all intra" codes collapse to I.
     I,
+    /// B slice (codes 1 and 6).
+    B,
 }
 
 /// One `dec_ref_pic_marking` adaptive command (spec 7.4.3.3).
@@ -73,18 +75,31 @@ pub(crate) struct SliceHeader {
     /// `delta_pic_order_cnt[1]`.
     #[allow(dead_code)]
     pub delta_poc1: i32,
-    /// `num_ref_idx_active_override_flag`. Folded into
-    /// `num_ref_idx_l0_active` at parse time.
+    /// `num_ref_idx_active_override_flag`. Folded into the
+    /// `num_ref_idx_*_active` fields at parse time.
     #[allow(dead_code)]
     pub num_ref_override: bool,
     /// Effective `num_ref_idx_l0_active` (post-override).
     pub num_ref_idx_l0_active: u32,
+    /// Effective `num_ref_idx_l1_active` (B slices; post-override).
+    pub num_ref_idx_l1_active: u32,
     /// `ref_pic_list_reordering` commands for L0: `(idc, value)`.
     pub reorder_l0: alloc::vec::Vec<(u32, u32)>,
-    /// Weighted-prediction table for L0 when `weighted_pred_flag`.
+    /// Reordering commands for L1 (B slices).
+    pub reorder_l1: alloc::vec::Vec<(u32, u32)>,
+    /// Weighted-prediction table for L0 (`weighted_pred_flag` P or
+    /// `weighted_bipred_idc == 1` B).
     pub wp_l0: Option<alloc::vec::Vec<WpEntry>>,
+    /// Weighted-prediction table for L1 (explicit B weights only).
+    pub wp_l1: Option<alloc::vec::Vec<WpEntry>>,
     /// `log2` denominators for the weighted table.
     pub wp_denom: (u32, u32),
+    /// `direct_spatial_mv_pred_flag` (B slices): spatial vs temporal
+    /// direct prediction for direct-mode macroblocks.
+    pub direct_spatial: bool,
+    /// `cabac_init_idc` (CABAC slices, non-I): picks one of the three
+    /// P/B context-init table rows.
+    pub cabac_init_idc: u32,
     /// IDR marking: `no_output_of_prior_pics_flag`, `long_term_reference_flag`.
     pub idr_marking: (bool, bool),
     /// Non-IDR marking: `adaptive_ref_pic_marking_mode_flag` + MMCO list.
@@ -118,7 +133,7 @@ pub(crate) fn parse_header(
     let slice_type = match st {
         0 | 5 => SliceType::P,
         2 | 7 => SliceType::I,
-        1 | 6 => return Err(Error::Unsupported("h264 B slice")),
+        1 | 6 => SliceType::B,
         3 | 8 => return Err(Error::Unsupported("h264 SP slice")),
         4 | 9 => return Err(Error::Unsupported("h264 SI slice")),
         _ => return Err(Error::BadValue("slice_type over 9")),
@@ -156,22 +171,29 @@ pub(crate) fn parse_header(
         _ => {}
     }
     // redundant_pic_cnt is gated by the PPS flag we already refused.
-    let direct_spatial = false; // B-slice only; never parsed for P.
-    let _ = direct_spatial;
+    let mut direct_spatial = false;
+    if slice_type == SliceType::B {
+        direct_spatial = br.bit()?;
+    }
     let mut num_ref_override = false;
     let mut num_ref_idx_l0_active = pps.num_ref_idx_l0_active;
-    if slice_type == SliceType::P {
+    let mut num_ref_idx_l1_active = pps.num_ref_idx_l1_active;
+    if matches!(slice_type, SliceType::P | SliceType::B) {
         num_ref_override = br.bit()?;
         if num_ref_override {
             num_ref_idx_l0_active = br.ue()? + 1;
-            if num_ref_idx_l0_active > 32 {
-                return Err(Error::BadValue("num_ref_idx_l0_active over 32"));
+            if slice_type == SliceType::B {
+                num_ref_idx_l1_active = br.ue()? + 1;
+            }
+            if num_ref_idx_l0_active > 32 || num_ref_idx_l1_active > 32 {
+                return Err(Error::BadValue("num_ref_idx_active over 32"));
             }
         }
     }
-    // ref_pic_list_reordering (spec 7.4.3.1), P slices only (and SI).
+    // ref_pic_list_reordering (spec 7.4.3.1): L0 on P and B, L1 on B.
     let mut reorder_l0 = alloc::vec::Vec::new();
-    if slice_type == SliceType::P && br.bit()? {
+    let mut reorder_l1 = alloc::vec::Vec::new();
+    let mut read_reorder = |list: &mut alloc::vec::Vec<(u32, u32)>, cap: u32| -> Result<()> {
         loop {
             let idc = br.ue()?;
             if idc > 3 {
@@ -181,47 +203,92 @@ pub(crate) fn parse_header(
                 break;
             }
             // idc 0/1 take abs_diff_pic_num_minus1, idc 2 takes
-            // long_term_pic_num — both ue(v) in the stream.
+            // long_term_pic_num — all ue(v) in the stream.
             let v = br.ue()?;
-            if reorder_l0.len() >= num_ref_idx_l0_active as usize + 2 {
+            if list.len() >= cap as usize + 2 {
                 return Err(Error::BadValue("ref_pic_list_reordering too long"));
             }
-            reorder_l0.push((idc, v));
+            list.push((idc, v));
         }
+        Ok(())
+    };
+    if matches!(slice_type, SliceType::P | SliceType::B) && br.bit()? {
+        read_reorder(&mut reorder_l0, num_ref_idx_l0_active)?;
     }
-    // pred_weight_table for P slices when weighted_pred_flag.
+    if slice_type == SliceType::B && br.bit()? {
+        read_reorder(&mut reorder_l1, num_ref_idx_l1_active)?;
+    }
+    // pred_weight_table (spec 7.4.3.2): P under `weighted_pred_flag`,
+    // B under `weighted_bipred_idc == 1` (explicit weights). idc 2 is
+    // implicit weighting — no table follows the reorder section then.
     let mut wp_l0 = None;
+    let mut wp_l1 = None;
     let mut wp_denom = (0u32, 0u32);
-    if pps.weighted_pred && slice_type == SliceType::P {
+    let explicit_wp = (slice_type == SliceType::P && pps.weighted_pred)
+        || (slice_type == SliceType::B && pps.weighted_bipred_idc == 1);
+    if explicit_wp {
         let luma_denom = br.ue()?;
         let chroma_denom = br.ue()?;
         if luma_denom > 7 || chroma_denom > 7 {
             return Err(Error::BadValue("weight denom over 7"));
         }
         wp_denom = (luma_denom, chroma_denom);
-        let mut table = alloc::vec::Vec::with_capacity(num_ref_idx_l0_active as usize);
-        for _ in 0..num_ref_idx_l0_active {
-            let luma_flag = br.bit()?;
-            let luma = if luma_flag {
-                (br.se()?, br.se()?)
-            } else {
-                (1i32 << luma_denom, 0)
-            };
-            let chroma_flag = br.bit()?;
-            let mut chroma = [(1i32 << chroma_denom, 0); 2];
-            if chroma_flag {
-                for c in chroma.iter_mut() {
-                    *c = (br.se()?, br.se()?);
+        // One list's table per spec 7.4.3.2 order — luma flags, luma
+        // weights, chroma flags, chroma weights — then L1 repeats it.
+        let mut read_list = |count: u32| -> Result<alloc::vec::Vec<WpEntry>> {
+            let mut luma_flags = alloc::vec::Vec::with_capacity(count as usize);
+            for _ in 0..count {
+                luma_flags.push(br.bit()?);
+            }
+            let mut weights = alloc::vec::Vec::with_capacity(count as usize);
+            for &f in luma_flags.iter() {
+                if f {
+                    let w = br.se()?;
+                    let o = br.se()?;
+                    if !(-128..=127).contains(&w) || !(-128..=127).contains(&o) {
+                        return Err(Error::BadValue("luma weight/offset out of range"));
+                    }
+                    weights.push((w, o));
+                } else {
+                    weights.push((1i32 << luma_denom, 0));
                 }
             }
-            table.push(WpEntry {
-                luma,
-                chroma,
-                luma_flag,
-                chroma_flag,
-            });
+            let mut chroma_flags = alloc::vec::Vec::with_capacity(count as usize);
+            for _ in 0..count {
+                chroma_flags.push(br.bit()?);
+            }
+            let mut chroma_w = alloc::vec::Vec::with_capacity(count as usize);
+            for &f in chroma_flags.iter() {
+                if f {
+                    let mut c = [(0i32, 0i32); 2];
+                    for p in c.iter_mut() {
+                        *p = (br.se()?, br.se()?);
+                        if !(-128..=127).contains(&p.0) || !(-128..=127).contains(&p.1) {
+                            return Err(Error::BadValue(
+                                "chroma weight/offset out of range",
+                            ));
+                        }
+                    }
+                    chroma_w.push(c);
+                } else {
+                    chroma_w.push([(1i32 << chroma_denom, 0); 2]);
+                }
+            }
+            let mut table = alloc::vec::Vec::with_capacity(count as usize);
+            for i in 0..count as usize {
+                table.push(WpEntry {
+                    luma: weights[i],
+                    chroma: chroma_w[i],
+                    luma_flag: luma_flags[i],
+                    chroma_flag: chroma_flags[i],
+                });
+            }
+            Ok(table)
+        };
+        wp_l0 = Some(read_list(num_ref_idx_l0_active)?);
+        if slice_type == SliceType::B {
+            wp_l1 = Some(read_list(num_ref_idx_l1_active)?);
         }
-        wp_l0 = Some(table);
     }
 
     // dec_ref_pic_marking (spec 7.3.3.3).
@@ -279,6 +346,16 @@ pub(crate) fn parse_header(
                 }
             }
         }
+
+    }
+    // cabac_init_idc sits between the marking block and slice_qp_delta
+    // on CABAC P/B slices (spec 7.3.3).
+    let mut cabac_init_idc = 0;
+    if pps.cabac && slice_type != SliceType::I {
+        cabac_init_idc = br.ue()?;
+        if cabac_init_idc > 2 {
+            return Err(Error::BadValue("cabac_init_idc over 2"));
+        }
     }
 
     let slice_qp_delta = br.se()?;
@@ -310,9 +387,14 @@ pub(crate) fn parse_header(
         delta_poc1,
         num_ref_override,
         num_ref_idx_l0_active,
+        num_ref_idx_l1_active,
         reorder_l0,
+        reorder_l1,
         wp_l0,
+        wp_l1,
         wp_denom,
+        direct_spatial,
+        cabac_init_idc,
         idr_marking,
         adaptive_marking,
         mmco,

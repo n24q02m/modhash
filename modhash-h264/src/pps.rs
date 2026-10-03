@@ -13,7 +13,8 @@ pub(crate) struct Pps {
     /// it for the message only.
     #[allow(dead_code)]
     pub sps_id: u32,
-    /// `entropy_coding_mode_flag` — `false` (CAVLC) required.
+    /// `entropy_coding_mode_flag` — `true` selects CABAC coding for
+    /// `macroblock_layer` (spec 9.3); `false` is CAVLC (9.2).
     pub cabac: bool,
     /// `pic_order_present_flag` (bottom-field POC delta in slice headers).
     pub bottom_field_pic_order: bool,
@@ -50,6 +51,9 @@ pub(crate) struct Pps {
     /// the slice header instead.
     #[allow(dead_code)]
     pub redundant_pic_cnt: bool,
+    /// `transform_8x8_mode_flag` (extension tail): permits the 8x8
+    /// integer transform on luma residual blocks.
+    pub transform_8x8_mode: bool,
 }
 
 /// Parses a PPS RBSP. `have_more_rbsp` — this crate parses the
@@ -66,11 +70,6 @@ pub(crate) fn parse(payload: &[u8]) -> Result<Pps> {
         return Err(Error::BadValue("pps references sps id over 31"));
     }
     let cabac = b.bit()?;
-    if cabac {
-        return Err(Error::Unsupported(
-            "h264 CABAC (entropy_coding_mode_flag = 1)",
-        ));
-    }
     let bottom_field_pic_order = b.bit()?;
     let num_slice_groups = b.ue()? + 1;
     if num_slice_groups > 1 {
@@ -104,19 +103,16 @@ pub(crate) fn parse(payload: &[u8]) -> Result<Pps> {
     let mut second_chroma_offset = chroma_qp_index_offset;
     // Extension tail (more_rbsp_data): transform_8x8_mode_flag,
     // pic_scaling_matrix, second chroma offset. Baseline streams do not
-    // send it; when present and it asks for 8x8 transforms that is a
-    // refusal, not a silent skip.
+    // send it.
+    let mut transform_8x8_mode = false;
     if !b.no_more_rbsp_data() {
-        let transform_8x8 = b.bit()?;
-        if transform_8x8 {
-            return Err(Error::Unsupported("h264 transform_8x8_mode (High profile)"));
-        }
+        transform_8x8_mode = b.bit()?;
         let scaling_matrix = b.bit()?;
         if scaling_matrix {
-            // Custom scaling lists are a High-profile feature; even
-            // the flat-defaults form changes quantisation, so this is
-            // always a refusal.
-            return Err(Error::Unsupported("h264 pic_scaling_matrix (High profile)"));
+            // Custom scaling lists change the quantisation tables; the
+            // flat-default case is still a refusal because parsing the
+            // list syntax without applying it would desync.
+            return Err(Error::Unsupported("h264 scaling_matrix_list"));
         }
         second_chroma_offset = b.se()?;
         if !(-12..=12).contains(&second_chroma_offset) {
@@ -142,5 +138,7 @@ pub(crate) fn parse(payload: &[u8]) -> Result<Pps> {
         deblocking_control,
         constrained_intra_pred,
         redundant_pic_cnt,
+        transform_8x8_mode,
     })
 }
+
