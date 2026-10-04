@@ -352,16 +352,19 @@ impl Decoder {
         // Record this picture's reference lists (frame_nums) for the
         // colocation mapping — only ref slices produce lists.
         if h.slice_type != SliceType::I {
-            self.last_lists = (
-                ref_order
+            let map = |order: &[usize]| -> Result<alloc::vec::Vec<u32>> {
+                order
                     .iter()
-                    .map(|&i| self.dpb.refs[i].frame_num)
-                    .collect(),
-                ref_order1
-                    .iter()
-                    .map(|&i| self.dpb.refs[i].frame_num)
-                    .collect(),
-            );
+                    .map(|&i| {
+                        self.dpb
+                            .refs
+                            .get(i)
+                            .map(|r| r.frame_num)
+                            .ok_or(Error::BadValue("ref list index out of range"))
+                    })
+                    .collect()
+            };
+            self.last_lists = (map(&ref_order)?, map(&ref_order1)?);
         }
         // Implicit weighted-prediction table (weighted_bipred_idc==2):
         // w0 for every (L0, L1) ref pair. Chroma shares the luma
@@ -3155,17 +3158,20 @@ fn mb_decode_cabac(
             let cbp_a = nb_at(&pic.mbs, map.mb_a(), cx.slice_id).map_or(0x0f, |n| n.cbp);
             let cbp_b = nb_at(&pic.mbs, map.mb_b(), cx.slice_id).map_or(0x0f, |n| n.cbp);
             // The cbp context bins address the neighbour column/row
-            // adjacent to this MB: for the left MB that is its right
-            // column (luma bits 1 and 3 of the raw pattern fold to the
-            // left-context bits 1 and 3), for the top MB the pattern is
-            // used verbatim (ffmpeg `left_cbp`/`top_cbp`). The 0x0F
-            // unavailable default stays as-is — the transform must only
-            // run on a real neighbour's pattern.
+            // adjacent to this MB. ffmpeg `left_cbp` (h264_mvpred.h
+            // fill_decode_caches): `(cbp_table & 0x7F0)` keeps chroma +
+            // I16x16-DC bits, and the two column folds are the identity
+            // on the progressive left_block table (left_block[0]=0,
+            // left_block[2]=2 map raw bits 1/3 back to context bits
+            // 1/3). `MbState::cbp` is u8 (DC bits live in `dc_coded`),
+            // so the in-range part is `cbp & 0x7A` (bits 1,3 luma;
+            // 4,5 chroma; 6 spare). The previous bit-rotating transform
+            // (0x05|shifts) cleared bit 3 and desynced the 4th luma-cbp
+            // bin whenever the left MB was coded. The 0x0F unavailable
+            // default stays as-is — the transform must only run on a
+            // real neighbour's pattern.
             let cbp_a_ctx = if nb_at(&pic.mbs, map.mb_a(), cx.slice_id).is_some() {
-                (cbp_a & 0xF0)
-                    | (cbp_a & 0x05)
-                    | ((cbp_a & 0x02) << 1)
-                    | ((cbp_a & 0x08) >> 2)
+                cbp_a & 0x7A
             } else {
                 0x0f
             };
@@ -3218,8 +3224,9 @@ fn mb_decode_cabac(
     if mb_type != MbType::IPcm {
         if let MbType::I16x16 { .. } = mb_type {
             // Luma DC (cat 0): cbf context from neighbours' DC-coded
-            // bit, then 16 coefficients on the 4x4 scan.
-            let cbf_ctx = dc_cbf_ctx(&pic.mbs, map, 0);
+            // bit, then 16 coefficients on the 4x4 scan. I16x16 is
+            // always intra: missing neighbours default DC-coded (0x7CF).
+            let cbf_ctx = dc_cbf_ctx(&pic.mbs, map, 0, true);
             let r = cabac::decode_residual(cab, ResCat::LumaDc16x16, cbf_ctx, &ZIGZAG_4X4)?;
             for s in 0..16 {
                 dc_y[ZIGZAG_4X4[s] as usize] = r.levels[s];
@@ -3290,7 +3297,7 @@ fn mb_decode_cabac(
         }
         if cbp_chroma > 0 {
             for (c, dc) in chroma_dc.iter_mut().enumerate() {
-                let cbf_ctx = dc_cbf_ctx(&pic.mbs, map, 1 + c);
+                let cbf_ctx = dc_cbf_ctx(&pic.mbs, map, 1 + c, mb_type.is_intra());
                 let r = cabac::decode_residual(
                     cab,
                     ResCat::ChromaDc,
@@ -3636,6 +3643,7 @@ fn read_cabac_refs(
                 continue;
             }
             let ctx_i = cabac_ref_ctx(&pic.mbs, m, map, sx, sy, l);
+            let count = if l == 0 { cx.h.num_ref_idx_l0_active } else { cx.h.num_ref_idx_l1_active };
             let r = cab.ref_idx(ctx_i)? as u8;
             let list_len = if l == 0 { cx.ref_order.len() } else { cx.ref_order1.len() };
             if r as usize >= list_len {
@@ -3899,7 +3907,13 @@ fn nc_cbf_ctx(mbs: &[MbState], nz_acc: &[u8; 24], map: MbMap, blk: usize, plane:
 /// cat 3 chroma DC): neighbours' `dc_coded` bits (spec 9.3.3.1.1.9
 /// `coded_block_flag` ctxIdxInc — the neighbour "coded" bit is the
 /// corresponding DC flag: left = A, top = B; `cat` selects which bit).
-fn dc_cbf_ctx(mbs: &[MbState], map: MbMap, cat_off: usize) -> usize {
+///
+/// ffmpeg `get_cabac_cbf_ctx` (is_dc) reads `left_cbp`/`top_cbp` DC
+/// bits (0x100 / 0x40 / 0x80). For a missing neighbour those default
+/// to 0x7CF for an intra MB (all DC bits SET — each unavailable
+/// neighbour contributes 1) and 0x00F for an inter MB (contributes 0),
+/// so the default depends on the current MB's intra flag.
+fn dc_cbf_ctx(mbs: &[MbState], map: MbMap, cat_off: usize, cur_intra: bool) -> usize {
     // cat_off: 0 = luma DC (dc_coded bit 0), 1 = Cb DC (bit 1),
     // 2 = Cr DC (bit 2).
     let bit = 1 << cat_off;
@@ -3907,12 +3921,12 @@ fn dc_cbf_ctx(mbs: &[MbState], map: MbMap, cat_off: usize) -> usize {
         .mb_a()
         .and_then(|i| mbs.get(i))
         .filter(|n| n.slice_id == map.sid)
-        .map_or(0, |n| u8::from(n.dc_coded & bit != 0));
+        .map_or(u8::from(cur_intra), |n| u8::from(n.dc_coded & bit != 0));
     let b = map
         .mb_b()
         .and_then(|i| mbs.get(i))
         .filter(|n| n.slice_id == map.sid)
-        .map_or(0, |n| u8::from(n.dc_coded & bit != 0));
+        .map_or(u8::from(cur_intra), |n| u8::from(n.dc_coded & bit != 0));
     usize::from(a) + 2 * usize::from(b)
 }
 

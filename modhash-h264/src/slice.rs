@@ -235,59 +235,60 @@ pub(crate) fn parse_header(
         || (slice_type == SliceType::B && pps.weighted_bipred_idc == 1);
     if explicit_wp {
         let luma_denom = br.ue()?;
+        // FFmpeg/ffmpeg-compatible readers take the chroma denominator
+        // as an absolute ue(v), NOT spec's se(delta) — x264 writes the
+        // absolute value (encoder.c pred_weight_table) and ffmpeg's
+        // ff_h264_pred_weight_table reads it back with get_ue_golomb_31.
+        // Matching the ecosystem beats the spec text here.
         let chroma_denom = br.ue()?;
         if luma_denom > 7 || chroma_denom > 7 {
-            return Err(Error::BadValue("weight denom over 7"));
+            return Err(Error::BadValue("weight denom out of range"));
         }
         wp_denom = (luma_denom, chroma_denom);
-        // One list's table per spec 7.4.3.2 order — luma flags, luma
-        // weights, chroma flags, chroma weights — then L1 repeats it.
+        // One table entry per reference, INTERLEAVED exactly as spec
+        // 7.3.5.2 writes it: luma flag, luma weight+offset, chroma
+        // flag, chroma weight+offset ×2 — NOT grouped passes. (A
+        // grouped parse desyncs the header tail on x264 streams.)
+        // ChromaArrayType is always 1 (4:2:0) in this crate, so the
+        // chroma fields are always present.
         let mut read_list = |count: u32| -> Result<alloc::vec::Vec<WpEntry>> {
-            let mut luma_flags = alloc::vec::Vec::with_capacity(count as usize);
+            let mut table = alloc::vec::Vec::with_capacity(count as usize);
             for _ in 0..count {
-                luma_flags.push(br.bit()?);
-            }
-            let mut weights = alloc::vec::Vec::with_capacity(count as usize);
-            for &f in luma_flags.iter() {
-                if f {
+                let luma_flag = br.bit()?;
+                let luma = if luma_flag {
                     let w = br.se()?;
                     let o = br.se()?;
                     if !(-128..=127).contains(&w) || !(-128..=127).contains(&o) {
                         return Err(Error::BadValue("luma weight/offset out of range"));
                     }
-                    weights.push((w, o));
+                    // The stream carries DELTAS (weight − 2^denom); the
+                    // decoder applies absolute scales, so fold the denom
+                    // in once at parse time (spec 8.4.2.2).
+                    (w + (1i32 << luma_denom), o)
                 } else {
-                    weights.push((1i32 << luma_denom, 0));
-                }
-            }
-            let mut chroma_flags = alloc::vec::Vec::with_capacity(count as usize);
-            for _ in 0..count {
-                chroma_flags.push(br.bit()?);
-            }
-            let mut chroma_w = alloc::vec::Vec::with_capacity(count as usize);
-            for &f in chroma_flags.iter() {
-                if f {
+                    (1i32 << luma_denom, 0)
+                };
+                let chroma_flag = br.bit()?;
+                let chroma = if chroma_flag {
                     let mut c = [(0i32, 0i32); 2];
                     for p in c.iter_mut() {
-                        *p = (br.se()?, br.se()?);
-                        if !(-128..=127).contains(&p.0) || !(-128..=127).contains(&p.1) {
+                        let (w, o) = (br.se()?, br.se()?);
+                        if !(-128..=127).contains(&w) || !(-128..=127).contains(&o) {
                             return Err(Error::BadValue(
                                 "chroma weight/offset out of range",
                             ));
                         }
+                        *p = (w + (1i32 << chroma_denom), o);
                     }
-                    chroma_w.push(c);
+                    c
                 } else {
-                    chroma_w.push([(1i32 << chroma_denom, 0); 2]);
-                }
-            }
-            let mut table = alloc::vec::Vec::with_capacity(count as usize);
-            for i in 0..count as usize {
+                    [(1i32 << chroma_denom, 0); 2]
+                };
                 table.push(WpEntry {
-                    luma: weights[i],
-                    chroma: chroma_w[i],
-                    luma_flag: luma_flags[i],
-                    chroma_flag: chroma_flags[i],
+                    luma,
+                    chroma,
+                    luma_flag,
+                    chroma_flag,
                 });
             }
             Ok(table)
@@ -331,22 +332,22 @@ pub(crate) fn parse_header(
                         max_long_term_frame_idx: 0,
                     };
                     match op {
-                        1 | 3 => {
+                        // mmco 1: difference_of_pic_nums_minus1 ue.
+                        1 => {
                             m.difference_of_pic_nums = br.ue()? + 1;
                         }
+                        // mmco 2 / 4: long_term_frame_idx ue.
+                        2 | 4 => {
+                            m.long_term_frame_idx = br.ue()?;
+                        }
+                        // mmco 6: max_long_term_frame_idx_minus1 ue.
+                        6 => {
+                            m.max_long_term_frame_idx = br.ue()? + 1;
+                        }
+                        // mmco 3 (sliding window) / 5 (IDR reset): no
+                        // payload fields.
+                        3 | 5 => {}
                         _ => {}
-                    }
-                    if op == 2 {
-                        m.long_term_pic_num = br.ue()?;
-                    }
-                    if op == 3 || op == 6 {
-                        m.long_term_frame_idx = br.ue()?;
-                    }
-                    if op == 4 {
-                        m.max_long_term_frame_idx = br.ue()?;
-                    }
-                    if op == 6 {
-                        m.long_term_pic_num = br.ue()?;
                     }
                     if mmco.len() >= 64 {
                         return Err(Error::BadValue("mmco list too long"));

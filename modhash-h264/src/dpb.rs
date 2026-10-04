@@ -130,7 +130,20 @@ impl Dpb {
                         self.refs.retain(|r| r.pic_num != target);
                     }
                     2 => return Err(Error::Unsupported("h264 MMCO long-term pic mark")),
-                    3 | 6 => return Err(Error::Unsupported("h264 long-term reference marking")),
+                    // 3: adaptive sliding window (8.2.5.3): evict the
+                    // short-term ref with the smallest PicNum.
+                    3 => {
+                        if !self.refs.is_empty() {
+                            let mut lowest = 0usize;
+                            for (i, r) in self.refs.iter().enumerate() {
+                                if r.pic_num < self.refs[lowest].pic_num {
+                                    lowest = i;
+                                }
+                            }
+                            self.refs.remove(lowest);
+                        }
+                    }
+                    6 => return Err(Error::Unsupported("h264 long-term reference marking")),
                     4 => return Err(Error::Unsupported("h264 MMCO max_long_term_frame_idx")),
                     // 5: reset — all refs unused + POC counters; our
                     // sliding window only needs the clear.
