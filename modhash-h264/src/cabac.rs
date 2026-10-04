@@ -232,7 +232,7 @@ impl<'a> Cabac<'a> {
         if self.decision(3 + i16orpcm.min(2))? == 0 {
             return Ok(0); // I4x4
         }
-        self.i16x16_suffix(5, 1)
+        self.i16x16_suffix(3, 1)
     }
 
     /// `mb_type` on a P slice (ctx 14..20 + intra 17..23 tail).
@@ -287,7 +287,7 @@ impl<'a> Cabac<'a> {
         if self.decision(base)? == 0 {
             return Ok(0); // I4x4
         }
-        self.i16x16_suffix(base + 1, intra)
+        self.i16x16_suffix(base, intra)
     }
 
     /// Bins after the I4x4/I16x16 discriminator: I_PCM via terminate,
@@ -503,7 +503,8 @@ pub(crate) enum ResCat {
     ChromaDc,
     /// Chroma AC (cat 4, bases 101/164/225/266).
     ChromaAc,
-    /// Luma 8x8 (cat 5, bases 402/436/451/426).
+    /// Luma 8x8 (cat 5, frame bases cbf 1012 / sig 402 / last 417 /
+    /// level 426; the cbf bin itself is not read for this category).
     Luma8x8,
 }
 
@@ -537,7 +538,9 @@ impl ResCat {
             ResCat::Luma4x4 => 195,
             ResCat::ChromaDc => 210,
             ResCat::ChromaAc => 213,
-            ResCat::Luma8x8 => 436,
+            // ff_h264_cabac.c last_coeff_flag_offset[0][5] = 417
+            // (frame). 436/451 are the *field* sig/last bases.
+            ResCat::Luma8x8 => 417,
         }
     }
     fn level_base(self) -> usize {
@@ -601,7 +604,11 @@ pub(crate) fn decode_residual(
         total_coeff: 0,
         levels: [0; 64],
     };
-    if cb.decision(cat.cbf_base() + cbf_ctx)? == 0 {
+    // coded_block_flag: skipped for luma 8x8 — the CB luma bits gate
+    // each 8x8 group directly (ffmpeg ff_h264_cabac.c:1859 reads the
+    // cbf bin only when `(cat != 5 || CHROMA444(h))`; this crate is
+    // 4:2:0 only).
+    if cat != ResCat::Luma8x8 && cb.decision(cat.cbf_base() + cbf_ctx)? == 0 {
         return Ok(out);
     }
     let max = cat.max_coeff();
@@ -612,18 +619,22 @@ pub(crate) fn decode_residual(
     let mut index = [0usize; 64];
     let mut count = 0usize;
     if cat == ResCat::Luma8x8 {
+        let mut ended_by_last = false;
         for pos in 0..63usize {
             if cb.decision(sig_base + SIG_OFFSET_8X8[pos] as usize)? != 0 {
                 index[count] = pos;
                 count += 1;
                 if cb.decision(last_base + t::LAST_COEFF_8X8[pos] as usize)? != 0 {
+                    ended_by_last = true;
                     break;
                 }
             }
         }
-        // Ran all 63 flagged positions without `last`: position 63 is
-        // significant (reference `if (last == max_coeff - 1)`).
-        if count < 64 {
+        // Loop ran all 63 flagged positions without a `last` flag:
+        // position 63 is the final significant coefficient (ffmpeg
+        // DECODE_SIGNIFICANCE: `last == max_coeff - 1` only after
+        // natural completion; the break path sets `last = max_coeff`).
+        if !ended_by_last {
             index[count] = 63;
             count += 1;
         }
