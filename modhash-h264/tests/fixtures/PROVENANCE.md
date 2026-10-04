@@ -73,3 +73,36 @@ decoder is ffmpeg (LGPL/GPL build); we use it only to *produce*
 expectations — the crate itself contains no ffmpeg code. ITU-T
 conformance vectors remain an open gap (unreachable); if fetched later
 they belong here with their own provenance lines.
+
+## Wave-3 High-profile fixtures (added 2026-10-03, recipe unrecorded)
+
+A second fixture set was added in commit `837ebf9` ("main profile +
+b-field fixtures") covering **High profile / CABAC / B slices /
+weighted prediction / 8x8 transforms** — everything the first set does
+not exercise. The exact x264 parameterisation was **not recorded**;
+do not assume baseline defaults or x264 spec-strict writers (these
+streams carry nonstandard encoder behaviours already observed, e.g.
+ue-coded absolute WP denominators). If the streams must be
+regenerated, recover the commands from that commit's session receipts
+before guessing.
+
+| file | size WxH | frames | exercise |
+|---|---|---|---|
+| m1_b3_64x64.h264 / .yuv | 64x64 | 10 | B pyramid refs |
+| m2_b2_refs_64x64.h264 / .yuv | 64x64 | 12 | B, 2 refs, ref_idx coding |
+| m3_b4_strat_64x48.h264 / .yuv | 64x48 | 12 | B 4-ref strategy |
+| m4_direct_temp_32x32.h264 / .yuv | 32x32 | 8 | temporal direct |
+| m5_direct_spat_32x32.h264 / .yuv | 32x32 | 8 | spatial direct |
+| m6_bpyr_64x64.h264 / .yuv | 64x64 | 12 | B pyramid |
+| t1_8x8_64x64.h264 / .yuv | 64x64 | 10 | 8x8 transform, P8x8 |
+| t2_8x8_part_64x64.h264 / .yuv | 64x64 | 10 | 8x8 transform, partitioned subs |
+| t3_i8x8_64x48.h264 / .yuv | 64x48 | 10 | intra 8x8 + inter 8x8 residual |
+| t4_8x8_umh_64x64.h264 / .yuv | 64x64 | 10 | 8x8, uneven multi-hexagon ME |
+| w1_wp_exp_64x64.h264 / .yuv | 64x64 | 11 | weighted pred explicit, P+B |
+| w2_wp_simple_64x64.h264 / .yuv | 64x64 | 12 | weighted pred P |
+| w3_wp_b_32x32.h264 / .yuv | 32x32 | 8 | weighted pred B |
+
+Untracked debug cuts (`_w1cut*`, `w1_wp_exp_64x64cut*`, `mcref*`,
+`mc8`) and `*.mine.yuv` outputs are session-generated derivatives,
+not fixtures: `.mine.yuv` is written by `examples/pocyuv` and can go
+stale — always regenerate before comparing.
