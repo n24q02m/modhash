@@ -2661,7 +2661,7 @@
     "matched": null,
     "score": null,
     "distance": null,
-    "error": "modhash match: C:\\Users\\n24q02m-wpc\\projects\\modhash-wt-diff\\lab\\differential\\corpus\\real\\audio_a.wav: audio: unsupported: audio sample rate \u00e2\u2030\u00a0 44100 Hz\nmodhash match: C:\\Users\\n24q02m-wpc\\projects\\modhash-wt-diff\\lab\\differential\\corpus\\real\\audio_a_quiet.wav: audio: unsupported: audio sample rate",
+    "error": "modhash match: corpus\\real\\audio_a.wav: audio: unsupported: audio sample rate \u00e2\u2030\u00a0 44100 Hz\nmodhash match: corpus\\real\\audio_a_quiet.wav: audio: unsupported: audio sample rate",
     "modality": null
    },
    "py": {

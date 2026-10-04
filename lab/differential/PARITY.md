@@ -5,9 +5,9 @@ nhieu deps voi rust zero deps" — end-to-end on one corpus.
 
 ## Provenance
 
-- **Rust**: worktree `modhash-wt-diff` at `81b826b` (origin/main), release
+- **Rust**: this repo at `81b826b` (origin/main), release
   build of `modhash-cli` + `probe/` harness (this lane only).
-- **Python**: `C:/Users/n24q02m-wpc/projects/.audit-hashkit-290926/arena_ws`
+- **Python**: `arena_ws`
   — **not a git repo** (no rev to pin; content pinned by
   `results/provenance.json`: SHA-256 tree-hash of `src/hashkit` +
   `pyproject.toml` + `uv.lock`). Run via `uv run --project arena_ws`.

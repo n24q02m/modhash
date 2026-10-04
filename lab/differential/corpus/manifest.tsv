@@ -36,17 +36,17 @@ img/prog_gray.jpg	copy	modhash-jpeg\tests\fixtures\prog_gray.jpg	54cb9e8eba77395
 img/rgb16_3x2.png	copy	modhash-png\tests\fixtures\rgb16_3x2.png	bee24a3bc3a138575e6e8dc79945330d1bf95dd172b39463b1fae4fbf007a0cf	106
 img/rgba16_2x2.png	copy	modhash-png\tests\fixtures\rgba16_2x2.png	bb111af6c7e9450f0d8624e01bdce1c826f47ae73454c8b2bf5c5544d7d0ebc7	100
 img/rle8.bmp	copy	modhash-bmp\tests\fixtures\rle8.bmp	8b7ac308b7a00dac3f4bcdc169e2a56ad4473f2677e21427bd8146c58f540a9c	1110
-real/audio_a.wav	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\real-check\tep\audio_a.wav	914aecdac939b3630f3477f2d1110b540f255c1b18110fceae6d58ecb751a31c	192044
-real/audio_a_quiet.wav	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\real-check\tep\audio_a_quiet.wav	b7ee2de73f36ff7a08f6a6049663dd7a2b3958f149603f65a719c93ec6c82b64	192044
-real/city_1.jpg	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\image-search\city-street-architecture-buildings-photo-1.jpg	588f69a2313b8030b3a25182fac66476572a35824d706706af13b9df20e1f2f2	2059816
-real/img_a.png	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\real-check\tep\img_a.png	aa2de22f743c707ca58ba753d0c8ebb5f062fb349d67407a2b147ef7861c00bf	133689
-real/img_b.jpg	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\real-check\tep\img_b.jpg	ebc686dbeaad72f69c4d7731e47b421174d766620ef8a2e2a786d91961c1918a	5576
-real/img_other.png	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\real-check\tep\img_other.png	07ccf8d9c0531e7359dc45ec6f6d79c71c57cbe42bbe26a2d4d0acdc668d861b	134337
-real/portrait_1.jpg	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\image-search\portrait-close-up-human-face-person-stud-1.jpg	c8e2788d4cc91870f36589ab20ded95054faeb89c33dda705d9e53fbe80f8e3f	26126
-real/text_a.txt	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\real-check\tep\text_a.txt	66cb25e219ebf4948363a8b307abd7ad5a9b20838c03b989afa2422d412abaa9	565
-real/text_a_edit.txt	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\real-check\tep\text_a_edit.txt	b1a8a30b61cb296a0a4ca23501667e493e5787998596f38188856ad30a9747c6	661
-real/text_b.txt	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\real-check\tep\text_b.txt	5a0e002008b72fcd6bbeca3a5a171ee7b864e59c70d3ba0584a384dd24c55365	239
-real/v_clip.avi	copy-external	C:\Users\n24q02m-wpc\projects\.audit-hashkit-290926\arena_ws\lab\datasets\real-check\tep\v_clip.avi	4a5f3b73d4a7f857af2e09fdc9b1abb8625df85847b415737588a928dbe625fa	77718
+real/audio_a.wav	copy-external	arena_ws/lab\datasets\real-check\tep\audio_a.wav	914aecdac939b3630f3477f2d1110b540f255c1b18110fceae6d58ecb751a31c	192044
+real/audio_a_quiet.wav	copy-external	arena_ws/lab\datasets\real-check\tep\audio_a_quiet.wav	b7ee2de73f36ff7a08f6a6049663dd7a2b3958f149603f65a719c93ec6c82b64	192044
+real/city_1.jpg	copy-external	arena_ws/lab\datasets\image-search\city-street-architecture-buildings-photo-1.jpg	588f69a2313b8030b3a25182fac66476572a35824d706706af13b9df20e1f2f2	2059816
+real/img_a.png	copy-external	arena_ws/lab\datasets\real-check\tep\img_a.png	aa2de22f743c707ca58ba753d0c8ebb5f062fb349d67407a2b147ef7861c00bf	133689
+real/img_b.jpg	copy-external	arena_ws/lab\datasets\real-check\tep\img_b.jpg	ebc686dbeaad72f69c4d7731e47b421174d766620ef8a2e2a786d91961c1918a	5576
+real/img_other.png	copy-external	arena_ws/lab\datasets\real-check\tep\img_other.png	07ccf8d9c0531e7359dc45ec6f6d79c71c57cbe42bbe26a2d4d0acdc668d861b	134337
+real/portrait_1.jpg	copy-external	arena_ws/lab\datasets\image-search\portrait-close-up-human-face-person-stud-1.jpg	c8e2788d4cc91870f36589ab20ded95054faeb89c33dda705d9e53fbe80f8e3f	26126
+real/text_a.txt	copy-external	arena_ws/lab\datasets\real-check\tep\text_a.txt	66cb25e219ebf4948363a8b307abd7ad5a9b20838c03b989afa2422d412abaa9	565
+real/text_a_edit.txt	copy-external	arena_ws/lab\datasets\real-check\tep\text_a_edit.txt	b1a8a30b61cb296a0a4ca23501667e493e5787998596f38188856ad30a9747c6	661
+real/text_b.txt	copy-external	arena_ws/lab\datasets\real-check\tep\text_b.txt	5a0e002008b72fcd6bbeca3a5a171ee7b864e59c70d3ba0584a384dd24c55365	239
+real/v_clip.avi	copy-external	arena_ws/lab\datasets\real-check\tep\v_clip.avi	4a5f3b73d4a7f857af2e09fdc9b1abb8625df85847b415737588a928dbe625fa	77718
 text/doc_a.txt	gen	60-phrase doc	1c19be4e83341d40bdd6b0644f839adb17fcfa8e4616528728753cfb864c3223	4131
 text/doc_a_edit.txt	gen	doc_a with 1 phrase changed	573cf11bd6a713ab5b3b9435d6e72f0ad78570bc1299e123f409193dafa57be4	4149
 text/doc_b.txt	gen	different 60-phrase doc	01f60b91d843c1e78afe35a439f718bb43d5c72a0819e61f99fce0f1184e8f63	3711

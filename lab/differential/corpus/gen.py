@@ -307,7 +307,7 @@ def main() -> int:
 
     # ------------------------------------------------- real files (arena)
     arena = os.environ.get("ARENA_WS",
-        "C:/Users/n24q02m-wpc/projects/.audit-hashkit-290926/arena_ws")
+        "arena_ws")
     arena = Path(arena)
     real_srcs = [
         (arena / "lab/datasets/real-check/tep/img_a.png", "real/img_a.png"),

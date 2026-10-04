@@ -9,6 +9,6 @@
 # whose source is absent are recorded as missing-skip, not faked.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-: "${ARENA_WS:=C:/Users/n24q02m-wpc/projects/.audit-hashkit-290926/arena_ws}"
+: "${ARENA_WS:=arena_ws}"
 export ARENA_WS
 python "$HERE/corpus/gen.py"
