@@ -596,13 +596,15 @@ pub(crate) struct Residual {
 ///
 /// `cbf_ctx` is the ctxIdx offset (0..3) the caller computed from
 /// neighbours (`nza>0 + 2*(nzb>0)`, or the cbp-bit variant for the DC
-/// categories). `scan` maps scan position -> slot in `levels`. When
-/// `coded_block_flag` decodes 0 the block is all-zero.
+/// categories). When `coded_block_flag` decodes 0 the block is
+/// all-zero. `_scan` is the caller's position table, kept for
+/// signature stability — both map branches now resolve positions via
+/// the ffmpeg-offset tables directly.
 pub(crate) fn decode_residual(
     cb: &mut Cabac<'_>,
     cat: ResCat,
     cbf_ctx: usize,
-    scan: &[u8],
+    _scan: &[u8],
 ) -> Result<Residual> {
     let mut out = Residual {
         total_coeff: 0,
