@@ -123,7 +123,17 @@ pub(crate) fn parse(payload: &[u8]) -> Result<Pps> {
         }
     }
 
-    crate::dbgln!("PPS: cabac={} nr0={} wp={} wbi={} pqp={} dbctrl={} t8={}", cabac, num_ref_idx_l0_active, weighted_pred, weighted_bipred_idc, pic_init_qp, deblocking_control, transform_8x8_mode);
+    crate::dbgln!(
+        "PPS: cabac={} nr0={} wp={} wbi={} pqp={} dbctrl={} t8={} cip={}",
+        cabac,
+        num_ref_idx_l0_active,
+        weighted_pred,
+        weighted_bipred_idc,
+        pic_init_qp,
+        deblocking_control,
+        transform_8x8_mode,
+        constrained_intra_pred
+    );
     Ok(Pps {
         id,
         sps_id,
@@ -143,4 +153,3 @@ pub(crate) fn parse(payload: &[u8]) -> Result<Pps> {
         transform_8x8_mode,
     })
 }
-

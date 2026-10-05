@@ -39,8 +39,14 @@ fn compute_bs(cur: &MbState, mb_a: Option<&MbState>, mb_b: Option<&MbState>) -> 
     // must match on every used list, not just L0.
     let two_lists = !matches!(
         cur.mb_type,
-        MbType::I4x4 | MbType::I16x16 { .. } | MbType::IPcm | MbType::P8x8
-            | MbType::P8x8Ref0 | MbType::P16x16 | MbType::P16x8 | MbType::P8x16
+        MbType::I4x4
+            | MbType::I16x16 { .. }
+            | MbType::IPcm
+            | MbType::P8x8
+            | MbType::P8x8Ref0
+            | MbType::P16x16
+            | MbType::P16x8
+            | MbType::P8x16
             | MbType::PSkip
     );
 
@@ -131,13 +137,7 @@ fn compute_bs(cur: &MbState, mb_a: Option<&MbState>, mb_b: Option<&MbState>) -> 
 /// bi-predicted blocks predicting the same pair of pictures in the same
 /// order" (bS 0) from genuinely different motion (bS 1)).
 #[allow(clippy::too_many_arguments)]
-fn mv_diff_bs(
-    q: &MbState,
-    p: &MbState,
-    qb: usize,
-    pb: usize,
-    two_lists: bool,
-) -> u8 {
+fn mv_diff_bs(q: &MbState, p: &MbState, qb: usize, pb: usize, two_lists: bool) -> u8 {
     let mvd = |a: [i16; 2], b: [i16; 2]| -> bool {
         (i32::from(a[0]) - i32::from(b[0])).abs() >= 4
             || (i32::from(a[1]) - i32::from(b[1])).abs() >= 4
@@ -159,16 +159,22 @@ fn mv_diff_bs(
     let rp1 = p.ref_idx_l1[pb] as i32;
     if !v {
         v = rq1 != rp1
-            || (rq1 != -1 && rq1 != 0xff && rp1 != -1 && rp1 != 0xff && mvd(q.mv_l1[qb], p.mv_l1[pb]));
+            || (rq1 != -1
+                && rq1 != 0xff
+                && rp1 != -1
+                && rp1 != 0xff
+                && mvd(q.mv_l1[qb], p.mv_l1[pb]));
     }
     if v {
         if rq0 != rp1 || rq1 != rp0 {
             return 1;
         }
-        let cross = (rq0 != -1 && rq0 != 0xff && rp1 != -1 && rp1 != 0xff
+        let cross = (rq0 != -1
+            && rq0 != 0xff
+            && rp1 != -1
+            && rp1 != 0xff
             && mvd(q.mv[qb], p.mv_l1[pb]))
-            || (rq1 != -1 && rq1 != 0xff && rp0 != -1 && rp0 != 0xff
-                && mvd(q.mv_l1[qb], p.mv[pb]));
+            || (rq1 != -1 && rq1 != 0xff && rp0 != -1 && rp0 != 0xff && mvd(q.mv_l1[qb], p.mv[pb]));
         u8::from(cross)
     } else {
         0
@@ -370,6 +376,26 @@ pub(crate) fn filter_frame(
             maps.push(compute_bs(cur, a, b));
         }
     }
+    {
+        extern crate std;
+        let tot: u32 = maps
+            .iter()
+            .map(|m| {
+                m.v.iter().flatten().map(|&v| u32::from(v)).sum::<u32>()
+                    + m.h.iter().flatten().map(|&v| u32::from(v)).sum::<u32>()
+            })
+            .sum();
+        std::eprintln!(
+            "dbf bs_total={} intra={:?} nz={:?}",
+            tot,
+            mbs.iter()
+                .map(|m| m.mb_type.is_intra() as u8)
+                .collect::<Vec<_>>(),
+            mbs.iter()
+                .map(|m| m.nz.iter().map(|&v| v > 0).count() as u8)
+                .collect::<Vec<_>>()
+        );
+    }
 
     for mb_y in 0..height_mbs {
         for mb_x in 0..width_mbs {
@@ -385,10 +411,10 @@ pub(crate) fn filter_frame(
             let off_cb = off_b;
             let _ = (off_ca, off_cb);
 
-            // LUMA: per 4-row band interleaved (h264bsd order):
-            // for each band e: vertical edges x={0,4,8,12} on that band's
-            // 4 rows, then horizontal edge y=4*e on all 16 columns.
-            // filter_v_edge covers rows y0..y0+3 -> call per band with bs row
+            // LUMA: per 4-row band interleaved (h264bsd order, proven
+            // byte-exact on frames 0/1): for each band e: vertical
+            // edges x={0,4,8,12} on that band's 4 rows, then horizontal
+            // edge y=4*e on all 16 columns.
             for band in 0..4usize {
                 let y0 = mb_y * 16 + band * 4;
                 for e in 0..4usize {
@@ -406,7 +432,6 @@ pub(crate) fn filter_frame(
                     } else {
                         qp_p.fill(cur.qp_y);
                     }
-                    // bs.v[e][band] applies to the 4 rows of this band
                     let one = bs.v[e][band];
                     filter_v_edge(
                         y, stride, x, y0, &[one; 4], &qp_p, cur.qp_y, off_a, off_b, false,

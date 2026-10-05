@@ -43,12 +43,7 @@ pub(crate) struct MvdBits {
 impl<'a> Cabac<'a> {
     /// Initialises engine + contexts (spec 9.3.1): `qp` is `SliceQPy`,
     /// `init_idc` the slice's `cabac_init_idc` (ignored for I slices).
-    pub(crate) fn new(
-        data: &'a [u8],
-        slice_type: SliceType,
-        qp: u8,
-        init_idc: u32,
-    ) -> Cabac<'a> {
+    pub(crate) fn new(data: &'a [u8], slice_type: SliceType, qp: u8, init_idc: u32) -> Cabac<'a> {
         let tab: &[[i8; 2]; 1024] = if slice_type == SliceType::I {
             &t::INIT_I
         } else {
@@ -141,7 +136,15 @@ impl<'a> Cabac<'a> {
             ((s & 1) ^ 1) as u8
         };
         self.renorm()?;
-        crate::dbgln!("  bin ctx={} bit={} s0={} pos={} range={} off={}", ctx, bit, s, self.pos, self.range, self.offset);
+        crate::dbgln!(
+            "  bin ctx={} bit={} s0={} pos={} range={} off={}",
+            ctx,
+            bit,
+            s,
+            self.pos,
+            self.range,
+            self.offset
+        );
         Ok(bit)
     }
 
@@ -149,8 +152,19 @@ impl<'a> Cabac<'a> {
     /// doubles each bit.
     pub(crate) fn bypass(&mut self) -> Result<u8> {
         self.offset = (self.offset << 1) | self.bit()?;
-        let b = if self.offset < self.range { 0 } else { self.offset -= self.range; 1 };
-        crate::dbgln!("  byp bit={} pos={} range={} off={}", b, self.pos, self.range, self.offset);
+        let b = if self.offset < self.range {
+            0
+        } else {
+            self.offset -= self.range;
+            1
+        };
+        crate::dbgln!(
+            "  byp bit={} pos={} range={} off={}",
+            b,
+            self.pos,
+            self.range,
+            self.offset
+        );
         Ok(b)
     }
 
@@ -159,11 +173,7 @@ impl<'a> Cabac<'a> {
     /// Callers pass the *negative* magnitude so bit 0 yields the
     /// positive value, matching the spec's sign_flag (0 = positive).
     fn bypass_sign(&mut self, v: i32) -> Result<i32> {
-        if self.bypass()? == 0 {
-            Ok(-v)
-        } else {
-            Ok(v)
-        }
+        if self.bypass()? == 0 { Ok(-v) } else { Ok(v) }
     }
 
     /// Current bit position in the RBSP (diagnostics only).
@@ -181,8 +191,16 @@ impl<'a> Cabac<'a> {
                 self.offset = (self.offset << 1) | self.bit()?;
             }
             false
-        } else { true };
-        crate::dbgln!("  term bit={} pos={} range={} off={}", t as u8, self.pos, self.range, self.offset);
+        } else {
+            true
+        };
+        crate::dbgln!(
+            "  term bit={} pos={} range={} off={}",
+            t as u8,
+            self.pos,
+            self.range,
+            self.offset
+        );
         Ok(t)
     }
 
@@ -416,19 +434,26 @@ impl<'a> Cabac<'a> {
 
     /// `ref_idx_lX` truncated-unary (ctx 54..59). `ctx` is the
     /// neighbour context (0..3) computed by the caller.
+    ///
+    /// The reference bitstream is NOT strict spec TR(cMax): x264's
+    /// `cabac_ref_internal` appends a terminating zero-bin even when
+    /// the value equals `num_ref_idx_active - 1`, and ffmpeg's
+    /// `decode_cabac_mb_ref` mirrors that by looping without a cMax
+    /// bound (only the 32 sanity guard). Stopping at cMax desyncs the
+    /// CABAC engine by one bin on every ref==cMax partition.
     pub(crate) fn ref_idx(&mut self, ctx: usize) -> Result<u32> {
         let mut ctx = ctx;
         let mut r = 0u32;
         while self.decision(54 + ctx)? != 0 {
             r += 1;
+            if r >= 32 {
+                return Err(Error::BadValue("h264 cabac ref_idx out of range"));
+            }
             // Spec Table 9-36 `ref_idx_lX` ctxIdxInc: the second bin
             // uses offset 4, every bin past that uses 5 — the
             // reference decoder's `ctx = (ctx >> 2) + 4` loop
             // converges to 5 after the second one-bin.
-            ctx = if r < 2 { 4 } else { 5 };
-            if r >= 32 {
-                return Err(Error::BadValue("h264 cabac ref_idx over 31"));
-            }
+            ctx = (ctx >> 2) + 4;
         }
         Ok(r)
     }
@@ -487,7 +512,11 @@ impl<'a> Cabac<'a> {
                 return Err(Error::BadValue("h264 cabac mb_qp_delta runaway"));
             }
         }
-        let delta = if val & 1 == 1 { (val + 1) >> 1 } else { -((val + 1) >> 1) };
+        let delta = if val & 1 == 1 {
+            (val + 1) >> 1
+        } else {
+            -((val + 1) >> 1)
+        };
         Ok(delta)
     }
 }
@@ -572,10 +601,9 @@ impl ResCat {
 /// `significant_coeff_flag` context offset per 8x8 scan position
 /// (frame picture).
 const SIG_OFFSET_8X8: [u8; 63] = [
-    0, 1, 2, 3, 4, 5, 5, 4, 4, 3, 3, 4, 4, 4, 5, 5,
-    4, 4, 4, 4, 3, 3, 6, 7, 7, 7, 8, 9, 10, 9, 8, 7,
-    7, 6, 11, 12, 13, 11, 6, 7, 8, 9, 14, 10, 9, 8, 6, 11,
-    12, 13, 11, 6, 9, 14, 10, 9, 11, 12, 13, 11, 14, 10, 12,
+    0, 1, 2, 3, 4, 5, 5, 4, 4, 3, 3, 4, 4, 4, 5, 5, 4, 4, 4, 4, 3, 3, 6, 7, 7, 7, 8, 9, 10, 9, 8,
+    7, 7, 6, 11, 12, 13, 11, 6, 7, 8, 9, 14, 10, 9, 8, 6, 11, 12, 13, 11, 6, 9, 14, 10, 9, 11, 12,
+    13, 11, 14, 10, 12,
 ];
 
 /// `coeff_abs_level` node-context tables (spec 9.3.2.4).

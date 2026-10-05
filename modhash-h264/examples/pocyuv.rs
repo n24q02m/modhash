@@ -12,7 +12,10 @@ fn main() {
                     out.extend_from_slice(&f.cb);
                     out.extend_from_slice(&f.cr);
                 }
-                fs::File::create(format!("tests/fixtures/{name}.mine.yuv")).unwrap().write_all(&out).unwrap();
+                fs::File::create(format!("tests/fixtures/{name}.mine.yuv"))
+                    .unwrap()
+                    .write_all(&out)
+                    .unwrap();
                 println!("{name}: OK {} frames -> .mine.yuv", frames.len());
             }
             Err(e) => println!("{name}: ERR {e:?}"),

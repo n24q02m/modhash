@@ -138,7 +138,9 @@ pub(crate) fn parse(payload: &[u8]) -> Result<Sps> {
     if profile == Profile::High {
         let chroma_format_idc = b.ue()?;
         if chroma_format_idc != 1 {
-            return Err(Error::Unsupported("h264 chroma_format_idc != 1 (4:2:2/4:4:4)"));
+            return Err(Error::Unsupported(
+                "h264 chroma_format_idc != 1 (4:2:2/4:4:4)",
+            ));
         }
         if chroma_format_idc == 3 {
             let _separate_colour_plane = b.bit()?;

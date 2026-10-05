@@ -118,11 +118,7 @@ pub(crate) struct SliceHeader {
 
 /// One `ref_pic_list_reordering` loop (spec 7.3.3.1): `(idc, value)`
 /// pairs terminated by idc 3.
-fn read_reorder(
-    br: &mut Br<'_>,
-    list: &mut alloc::vec::Vec<(u32, u32)>,
-    cap: u32,
-) -> Result<()> {
+fn read_reorder(br: &mut Br<'_>, list: &mut alloc::vec::Vec<(u32, u32)>, cap: u32) -> Result<()> {
     loop {
         let idc = br.ue()?;
         if idc > 3 {
@@ -261,10 +257,10 @@ pub(crate) fn parse_header(
                     if !(-128..=127).contains(&w) || !(-128..=127).contains(&o) {
                         return Err(Error::BadValue("luma weight/offset out of range"));
                     }
-                    // The stream carries DELTAS (weight − 2^denom); the
-                    // decoder applies absolute scales, so fold the denom
-                    // in once at parse time (spec 8.4.2.2).
-                    (w + (1i32 << luma_denom), o)
+                    // The stream carries ABSOLUTE weights (spec
+                    // 7.3.3.2: luma_weight_l0 is the applied scale);
+                    // 1<<denom is only the flag=0 default.
+                    (w, o)
                 } else {
                     (1i32 << luma_denom, 0)
                 };
@@ -274,11 +270,9 @@ pub(crate) fn parse_header(
                     for p in c.iter_mut() {
                         let (w, o) = (br.se()?, br.se()?);
                         if !(-128..=127).contains(&w) || !(-128..=127).contains(&o) {
-                            return Err(Error::BadValue(
-                                "chroma weight/offset out of range",
-                            ));
+                            return Err(Error::BadValue("chroma weight/offset out of range"));
                         }
-                        *p = (w + (1i32 << chroma_denom), o);
+                        *p = (w, o);
                     }
                     c
                 } else {
@@ -297,6 +291,7 @@ pub(crate) fn parse_header(
         if slice_type == SliceType::B {
             wp_l1 = Some(read_list(num_ref_idx_l1_active)?);
         }
+        crate::dbgln!("wp denom={:?} l0={:?} l1={:?}", wp_denom, wp_l0, wp_l1);
     }
 
     // dec_ref_pic_marking (spec 7.3.3.3).
@@ -313,7 +308,6 @@ pub(crate) fn parse_header(
             }
         } else {
             adaptive_marking = br.bit()?;
-            crate::dbgln!("mmco nal_ref={} fnum={} adapt={} pos={} st={} nr0={} nr1={} ro0={} ro1={} wp0={} wp1={} poc={} nro={} bytes={:?}", nal_ref_idc, frame_num, adaptive_marking, br.position(), slice_type as u8, num_ref_idx_l0_active, num_ref_idx_l1_active, reorder_l0.len(), reorder_l1.len(), wp_l0.is_some(), wp_l1.is_some(), pic_order_cnt_lsb, num_ref_override, &br.raw()[(br.position()/8).saturating_sub(2)..(br.position()/8+10).min(br.raw().len())]);
             if adaptive_marking {
                 loop {
                     let op = br.ue()?;
@@ -356,7 +350,6 @@ pub(crate) fn parse_header(
                 }
             }
         }
-
     }
     // cabac_init_idc sits between the marking block and slice_qp_delta
     // on CABAC P/B slices (spec 7.3.3).
@@ -384,6 +377,20 @@ pub(crate) fn parse_header(
             offset_b = (br.se()? * 2) as i8;
         }
     }
+
+    crate::dbgln!(
+        "sh fnum={} st={} nr0={} nr1={} wp0={} wp1={} idc={} dbfc={} oa={} ob={}",
+        frame_num,
+        slice_type as u8,
+        num_ref_idx_l0_active,
+        num_ref_idx_l1_active,
+        wp_l0.is_some(),
+        wp_l1.is_some(),
+        disable_deblock_idc,
+        pps.deblocking_control,
+        offset_a,
+        offset_b
+    );
 
     Ok(SliceHeader {
         first_mb,
