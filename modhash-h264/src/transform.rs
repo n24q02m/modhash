@@ -208,14 +208,8 @@ const LEVEL_SCALE_8X8: [[u16; 6]; 6] = [
 /// derived from spec 8.5.12.1's scale-position mapping (matches the
 /// reference decoder's `dequant8_coeff_init_scan`).
 const SCALE8_CLASS: [u8; 64] = [
-    0, 3, 4, 3, 0, 3, 4, 3,
-    3, 1, 5, 1, 3, 1, 5, 1,
-    4, 5, 2, 5, 4, 5, 2, 5,
-    3, 1, 5, 1, 3, 1, 5, 1,
-    0, 3, 4, 3, 0, 3, 4, 3,
-    3, 1, 5, 1, 3, 1, 5, 1,
-    4, 5, 2, 5, 4, 5, 2, 5,
-    3, 1, 5, 1, 3, 1, 5, 1,
+    0, 3, 4, 3, 0, 3, 4, 3, 3, 1, 5, 1, 3, 1, 5, 1, 4, 5, 2, 5, 4, 5, 2, 5, 3, 1, 5, 1, 3, 1, 5, 1,
+    0, 3, 4, 3, 0, 3, 4, 3, 3, 1, 5, 1, 3, 1, 5, 1, 4, 5, 2, 5, 4, 5, 2, 5, 3, 1, 5, 1, 3, 1, 5, 1,
 ];
 
 /// Dequantises one 8x8 coefficient block in place (spec 8.5.12.1 with
@@ -246,14 +240,7 @@ pub(crate) type Block8 = [i32; 64];
 /// mandatory, they are not factorisations).
 fn idct8_pass(b: &mut [i32], idx: [usize; 8]) {
     let c = [
-        b[idx[0]],
-        b[idx[1]],
-        b[idx[2]],
-        b[idx[3]],
-        b[idx[4]],
-        b[idx[5]],
-        b[idx[6]],
-        b[idx[7]],
+        b[idx[0]], b[idx[1]], b[idx[2]], b[idx[3]], b[idx[4]], b[idx[5]], b[idx[6]], b[idx[7]],
     ];
     let a0 = c[0].wrapping_add(c[4]);
     let a2 = c[0].wrapping_sub(c[4]);
@@ -310,7 +297,16 @@ pub(crate) fn inverse_8x8(b: &mut Block8) {
         idct8_pass(b, idx);
     }
     for i in 0..8 {
-        let idx = [i * 8, i * 8 + 1, i * 8 + 2, i * 8 + 3, i * 8 + 4, i * 8 + 5, i * 8 + 6, i * 8 + 7];
+        let idx = [
+            i * 8,
+            i * 8 + 1,
+            i * 8 + 2,
+            i * 8 + 3,
+            i * 8 + 4,
+            i * 8 + 5,
+            i * 8 + 6,
+            i * 8 + 7,
+        ];
         idct8_pass(b, idx);
     }
     // Final >>6 normalisation (the reference applies it while storing).

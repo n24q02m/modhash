@@ -241,10 +241,10 @@ impl Dpb {
             let last = *order.last().unwrap_or(&0);
             order.push(last);
         }
+        // ffmpeg's ref list is always exactly `num_ref_idx_active`
+        // entries; the reorder shift window must not see the tail.
+        order.truncate(cap);
         self.apply_reorder(&mut order, &h.reorder_l0, frame_num, cap)?;
-        if order.len() > cap {
-            order.truncate(cap);
-        }
         Ok(order)
     }
 
@@ -282,10 +282,8 @@ impl Dpb {
             let last = *order.last().unwrap_or(&0);
             order.push(last);
         }
+        order.truncate(cap);
         self.apply_reorder(&mut order, &h.reorder_l1, frame_num, cap)?;
-        if order.len() > cap {
-            order.truncate(cap);
-        }
         // Spec 8.2.4.2.3: when RefPicList1[0] == RefPicList0[0] and
         // both lists have entries, swap the first two L1 entries so
         // a same-picture pair does not stall direct prediction.
@@ -309,7 +307,6 @@ impl Dpb {
         if cmds.is_empty() {
             return Ok(());
         }
-        let n = order.len();
         let mut list = order.clone();
         let mut pred = i64::from(frame_num);
         let mut idx: usize = 0;
@@ -322,16 +319,40 @@ impl Dpb {
                     (pred + v).rem_euclid(i64::from(self.max_frame_num))
                 };
                 let want = pred as u32;
-                let pos = list
+                // ffmpeg `h264_refs.c` reorder semantics (the reference
+                // decoder): resolve the target picture by PicNum among
+                // all refs (any list position), then search only the
+                // TAIL `list[idx..n-1)` for it. Found: shift the tail
+                // right and place it at `idx` (moves it forward). Not
+                // found: still shift + place — the picture lands at
+                // `idx` even when it already sits earlier in the list
+                // (a deliberate duplicate; remove+insert across the
+                // whole list is WRONG and picks the wrong reference).
+                let resolved = self
+                    .refs
                     .iter()
-                    .position(|&i| self.refs[i].pic_num == want)
+                    .position(|r| r.pic_num == want)
                     .ok_or(Error::BadValue("ref reorder target not in list"))?;
                 if idx >= cap {
                     return Err(Error::BadValue("ref reorder index out of range"));
                 }
-                let r = list.remove(pos);
-                let ins = idx.min(list.len());
-                list.insert(ins, r);
+                let n = list.len();
+                let mut pos = idx;
+                let mut found = false;
+                while pos + 1 < n {
+                    if self.refs[list[pos]].pic_num == want {
+                        found = true;
+                        break;
+                    }
+                    pos += 1;
+                }
+                if !found {
+                    pos = n.saturating_sub(1).max(idx);
+                }
+                for j in (idx + 1..=pos).rev() {
+                    list[j] = list[j - 1];
+                }
+                list[idx] = resolved;
                 idx += 1;
             } else {
                 return Err(Error::Unsupported("h264 long-term ref reorder"));

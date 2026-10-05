@@ -26,7 +26,10 @@ use crate::nal::{self, Nal};
 use crate::pps::{self, Pps};
 use crate::slice::{self, Mmco, SliceHeader, SliceType};
 use crate::sps::{self, Sps};
-use crate::tables::{CAVLC_SCAN_8X8, CBP_INTER, CBP_INTRA, QPC_TABLE, SCAN_2X2, ZIGZAG_4X4, ZIGZAG_8X8, block_index, block_xy};
+use crate::tables::{
+    CAVLC_SCAN_8X8, CBP_INTER, CBP_INTRA, QPC_TABLE, SCAN_2X2, ZIGZAG_4X4, ZIGZAG_8X8, block_index,
+    block_xy,
+};
 use crate::transform;
 use crate::{Frame, Limits};
 use alloc::vec::Vec;
@@ -217,6 +220,14 @@ impl Decoder {
             nal::NAL_SPS => {
                 let rbsp = nal::rbsp(n.payload)?;
                 let sps = sps::parse(&rbsp)?;
+                crate::dbgln!(
+                    "sps: log2_mfn={} log2_poc_lsb={} poc_type_off={} mfn_minus4={} direct_8x8_inf={}",
+                    sps.log2_max_frame_num,
+                    sps.log2_max_poc_lsb,
+                    sps.log2_max_poc_lsb.saturating_sub(4),
+                    sps.log2_max_frame_num - 4,
+                    sps.direct_8x8_inference
+                );
                 self.dpb.reset(
                     1u32 << sps.log2_max_frame_num,
                     sps.max_num_ref_frames,
@@ -294,7 +305,11 @@ impl Decoder {
             }
             None => true,
         };
-        let cur_poc = if new_pic { Some(self.poc_of(&h, &sps, n.ref_idc, idr)) } else { None };
+        let cur_poc = if new_pic {
+            Some(self.poc_of(&h, &sps, n.ref_idc, idr))
+        } else {
+            None
+        };
         if new_pic {
             self.finish_picture()?;
             if idr {
@@ -330,7 +345,9 @@ impl Decoder {
         }
         let is_b = h.slice_type == SliceType::B;
         let ref_order: Vec<usize> = if h.slice_type != SliceType::I {
-            let order = self.dpb.ref_list0(&h, h.frame_num, pic_poc(&self.pic), is_b)?;
+            let order = self
+                .dpb
+                .ref_list0(&h, h.frame_num, pic_poc(&self.pic), is_b)?;
             if order.is_empty() {
                 return Err(Error::BadValue("P/B slice with empty L0 list"));
             }
@@ -339,9 +356,9 @@ impl Decoder {
             Vec::new()
         };
         let ref_order1: Vec<usize> = if is_b {
-            let order =
-                self.dpb
-                    .ref_list1(&h, h.frame_num, pic_poc(&self.pic), &ref_order)?;
+            let order = self
+                .dpb
+                .ref_list1(&h, h.frame_num, pic_poc(&self.pic), &ref_order)?;
             if order.is_empty() {
                 return Err(Error::BadValue("B slice with empty L1 list"));
             }
@@ -374,11 +391,8 @@ impl Decoder {
             let mut v = alloc::vec![32i32; ref_order.len() * ref_order1.len()];
             for (i0, &r0) in ref_order.iter().enumerate() {
                 for (i1, &r1) in ref_order1.iter().enumerate() {
-                    v[i0 * ref_order1.len() + i1] = implicit_w0(
-                        cur,
-                        self.dpb.refs[r0].poc,
-                        self.dpb.refs[r1].poc,
-                    );
+                    v[i0 * ref_order1.len() + i1] =
+                        implicit_w0(cur, self.dpb.refs[r0].poc, self.dpb.refs[r1].poc);
                 }
             }
             v
@@ -389,6 +403,40 @@ impl Decoder {
             .iter()
             .map(|&i| self.dpb.refs[i].frame_num)
             .collect();
+        extern crate std;
+        if std::env::var("IWDBG").is_ok() {
+            crate::dbgln!(
+                "iw cur={} poc0={:?} poc1={:?} matrix={:?}",
+                pic_poc(&self.pic),
+                ref_order
+                    .iter()
+                    .map(|&i| self.dpb.refs[i].poc)
+                    .collect::<Vec<_>>(),
+                ref_order1
+                    .iter()
+                    .map(|&i| self.dpb.refs[i].poc)
+                    .collect::<Vec<_>>(),
+                iw
+            );
+        }
+        crate::dbgln!(
+            "lists fnum={} st={:?} nr0={} nr1={} l0={:?} l1={:?} pocs0={:?} cmds0={:?} cmds1={:?}",
+            h.frame_num,
+            h.slice_type,
+            h.num_ref_idx_l0_active,
+            h.num_ref_idx_l1_active,
+            l0_fns,
+            ref_order1
+                .iter()
+                .map(|&i| self.dpb.refs[i].frame_num)
+                .collect::<alloc::vec::Vec<_>>(),
+            ref_order
+                .iter()
+                .map(|&i| self.dpb.refs[i].poc)
+                .collect::<alloc::vec::Vec<_>>(),
+            h.reorder_l0,
+            h.reorder_l1,
+        );
         let mut cx = SliceCx {
             sps: &sps,
             pps: &pps,
@@ -420,20 +468,45 @@ impl Decoder {
         let wm = sps.width_mbs as usize;
         let hm = sps.height_mbs as usize;
         let mut buf = pic.buf;
-        dbgln!("pre-deblock y[0..16] {:?}", &buf.y[0..16]);
-        deblock::filter_frame(
-            &mut buf.y,
-            &mut buf.cb,
-            &mut buf.cr,
-            buf.w,
-            &pic.mbs,
-            wm,
-            hm,
-            &QPC_TABLE,
-            pic.chroma_off_cb,
-            pic.chroma_off_cr,
-        );
-        dbgln!("post-deblock y[0..16] {:?}", &buf.y[0..16]);
+        dbgln!("pre-deblock y[0..16] {:?}", &buf.y[..16.min(buf.y.len())],);
+        let dump_rect = |buf: &FrameBuf, tag: &str| {
+            if let Ok(specs) = std::env::var("DBGRECT") {
+                // spec list: poc:x0:y0:x1:y1[;poc:x0:y0:x1:y1...]
+                for spec in specs.split(';') {
+                    let v: Vec<usize> = spec.split(':').filter_map(|s| s.parse().ok()).collect();
+                    if v.len() == 5 {
+                        let (pi, x0, y0, x1, y1) = (v[0], v[1], v[2], v[3], v[4]);
+                        if pic.poc == pi as i64 {
+                            for y in y0..y1 {
+                                let row: Vec<u8> = (x0..x1).map(|x| buf.y[y * buf.w + x]).collect();
+                                dbgln!("rect{} poc{} y={} {:?}", tag, pi, y, row);
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        dump_rect(&buf, "pre");
+        extern crate std;
+        let keep_dbf_frame0 = std::env::var("DBFF0").is_ok() && pic.frame_num == 0;
+        let skip_dbf =
+            std::env::var("NODBF").is_ok() || (std::env::var("NODBF1").is_ok() && !keep_dbf_frame0);
+        if !skip_dbf {
+            deblock::filter_frame(
+                &mut buf.y,
+                &mut buf.cb,
+                &mut buf.cr,
+                buf.w,
+                &pic.mbs,
+                wm,
+                hm,
+                &QPC_TABLE,
+                pic.chroma_off_cb,
+                pic.chroma_off_cr,
+            );
+        }
+        dbgln!("post-deblock y[0..16] {:?}", &buf.y[..16.min(buf.y.len())],);
+        dump_rect(&buf, "post");
         if pic.nal_ref_idc != 0 {
             // Colocation data for future B-slice temporal direct
             // prediction: the picture's own L0/L1 lists (as frame_nums)
@@ -536,13 +609,19 @@ impl Decoder {
         let mut order: Vec<usize> = (0..self.frames.len()).collect();
         order.sort_by_key(|&i| self.frame_pocs[i]);
         let mut out = Vec::with_capacity(self.frames.len());
-        for i in order {
-            out.push(self.frames[i].clone());
+        for (oi, &i) in order.iter().enumerate() {
+            let f = &self.frames[i];
+            dbgln!(
+                "outmap out={} dec={} epoch_poc={:?}",
+                oi,
+                i,
+                self.frame_pocs[i],
+            );
+            out.push(f.clone());
         }
         Ok(out)
     }
 }
-
 
 /// Picture-order-count derivation (spec 8.2.1), ported from the
 /// reference decoder's `ff_h264_init_poc`. Returns
@@ -617,9 +696,7 @@ fn compute_poc(
                 expected_poc += i64::from(sps.offset_for_non_ref_pic);
             }
             let top = expected_poc + i64::from(h.delta_poc0);
-            let bottom = top
-                + i64::from(sps.offset_for_top_to_bottom)
-                + i64::from(h.delta_poc1);
+            let bottom = top + i64::from(sps.offset_for_top_to_bottom) + i64::from(h.delta_poc1);
             (top.min(bottom), frame_num_offset, 0, 0)
         }
         _ => {
@@ -800,6 +877,7 @@ fn p_skip(pic: &mut Pic, cx: &mut SliceCx<'_>, dpb: &Dpb, idx: usize, wm: usize)
         for r in m.ref_idx.iter_mut() {
             *r = 0;
         }
+        m.mv_valid = [true; 16];
         m.nz = [0; 24];
     }
     mc_partition(
@@ -840,6 +918,12 @@ fn b_skip(pic: &mut Pic, cx: &mut SliceCx<'_>, dpb: &Dpb, idx: usize, wm: usize)
     }
     // Borrow-split: the MB state comes out of pic.mbs for the call.
     let mut m = pic.mbs[idx].clone();
+    crate::dbgln!(
+        "bskip poc={} mb={} spatial={}",
+        cx.cur_poc,
+        idx,
+        cx.h.direct_spatial
+    );
     let r = direct_motion(pic, cx, dpb, idx, wm, &mut m, 0b1111);
     pic.mbs[idx] = m;
     r
@@ -854,6 +938,7 @@ fn mb_decode(
     idx: usize,
     wm: usize,
 ) -> Result<()> {
+    extern crate std;
     let code = br.ue()?;
     dbgln!("mb {idx} type_code {code} pos {}", br.position());
     let mb_type = match cx.h.slice_type {
@@ -887,7 +972,11 @@ fn mb_decode(
     let mut b_parts: Vec<Part> = Vec::new();
     let mut direct_mask = 0u8;
     let mut sub_direct_allowed_8x8 = true;
-    let mut sub_small_8x8 = false;
+    // ffmpeg `get_dct8x8_allowed` (h264_mvpred.h:157): any sub-mb
+    // partitioned below 8x8 (8x4/4x8/4x4) blocks
+    // transform_size_8x8_flag; B_Direct also blocks it without
+    // direct_8x8_inference.
+    let mut sub_blocks_8x8 = false;
     match mb_type {
         MbType::I4x4 => {
             // transform_8x8_mode_flag (spec 7.3.5 mb_pred) — the
@@ -956,6 +1045,14 @@ fn mb_decode(
             for st in sub_types.iter_mut() {
                 *st = SubMbType::from_code(br.ue()?)?;
             }
+            // ffmpeg ff_h264_p_sub_mb_type_info (h264data.c): sub code
+            // 3 (4x4 partitions) maps to MB_TYPE_8x8 which *blocks*
+            // the flag — the flag bit exists only when every sub is
+            // an 8x8 partition.
+            if std::env::var("NOSUBBLK").is_ok() {
+            } else if sub_types.iter().any(|st| !matches!(st, SubMbType::S8x8)) {
+                sub_blocks_8x8 = true;
+            }
             // ref_idx_l0 coded once per 8x8 sub-mb (spec 7.3.5.1);
             // P_8x8ref0 implies zero.
             let mut refs = [0u8; 4];
@@ -993,13 +1090,13 @@ fn mb_decode(
             if cx.h.num_ref_idx_l0_active > 1 && dirs & 1 != 0 {
                 p.ref0 = br.te(cx.h.num_ref_idx_l0_active - 1)? as u8;
                 if p.ref0 as usize >= cx.h.num_ref_idx_l0_active as usize {
-                        return Err(Error::BadValue("ref_idx_l0 out of list"));
+                    return Err(Error::BadValue("ref_idx_l0 out of list"));
                 }
             }
             if cx.h.num_ref_idx_l1_active > 1 && dirs & 2 != 0 {
                 p.ref1 = br.te(cx.h.num_ref_idx_l1_active - 1)? as u8;
                 if p.ref1 as usize >= cx.h.num_ref_idx_l1_active as usize {
-                        return Err(Error::BadValue("ref_idx_l1 out of list"));
+                    return Err(Error::BadValue("ref_idx_l1 out of list"));
                 }
             }
             if dirs & 1 != 0 {
@@ -1011,13 +1108,10 @@ fn mb_decode(
             b_parts.push(p);
         }
         MbType::BPart { p0, p1 } => {
-            let mut ps = [
-                Part::new(0, 0, p0.0 as usize, p0.1 as usize, p0.2),
-                {
-                    let g = part_geo_b(0, p0.0, p0.1);
-                    Part::new(g.0, g.1, g.2, g.3, p1.2)
-                },
-            ];
+            let mut ps = [Part::new(0, 0, p0.0 as usize, p0.1 as usize, p0.2), {
+                let g = part_geo_b(0, p0.0, p0.1);
+                Part::new(g.0, g.1, g.2, g.3, p1.2)
+            }];
             // All L0 refs, all L1 refs, all L0 mvds, all L1 mvds.
             for p in ps.iter_mut() {
                 if cx.h.num_ref_idx_l0_active > 1 && p.dirs & 1 != 0 {
@@ -1050,14 +1144,16 @@ fn mb_decode(
         MbType::B8x8 => {
             let mut subs = [SubMbType::BDirect; 4];
             for st in subs.iter_mut() {
-                *st = SubMbType::from_code_b(br.ue()?)?;
+                let code = br.ue()?;
+                crate::dbgln!("subcode {}", code);
+                *st = SubMbType::from_code_b(code)?;
             }
             for st in &subs {
                 match st {
                     SubMbType::BDirect => sub_direct_allowed_8x8 = false,
-                    SubMbType::BInter { nparts, .. } => {
-                        if *nparts > 1 {
-                            sub_small_8x8 = true;
+                    SubMbType::BInter { w4, h4, .. } => {
+                        if !(w4 == &2 && h4 == &2) {
+                            sub_blocks_8x8 = true;
                         }
                     }
                     _ => {}
@@ -1073,7 +1169,7 @@ fn mb_decode(
                     if uses {
                         refs0[sm] = br.te(cx.h.num_ref_idx_l0_active - 1)? as u8;
                         if refs0[sm] as usize >= cx.h.num_ref_idx_l0_active as usize {
-                        return Err(Error::BadValue("ref_idx_l0 out of list"));
+                            return Err(Error::BadValue("ref_idx_l0 out of list"));
                         }
                     }
                 }
@@ -1084,7 +1180,7 @@ fn mb_decode(
                     if uses {
                         refs1[sm] = br.te(cx.h.num_ref_idx_l1_active - 1)? as u8;
                         if refs1[sm] as usize >= cx.h.num_ref_idx_l1_active as usize {
-                        return Err(Error::BadValue("ref_idx_l1 out of list"));
+                            return Err(Error::BadValue("ref_idx_l1 out of list"));
                         }
                     }
                 }
@@ -1094,7 +1190,13 @@ fn mb_decode(
                 for (sm, &st) in subs.iter().enumerate() {
                     let sx = (sm % 2) * 2;
                     let sy = (sm / 2) * 2;
-                    if let SubMbType::BInter { w4, h4, nparts, dirs } = st {
+                    if let SubMbType::BInter {
+                        w4,
+                        h4,
+                        nparts,
+                        dirs,
+                    } = st
+                    {
                         if dirs & (1 << l) == 0 {
                             continue;
                         }
@@ -1107,21 +1209,17 @@ fn mb_decode(
                             let x4 = sx + px;
                             let y4 = sy + py;
                             if l == 0 {
-                                let mut p = Part::new(
-                                    x4,
-                                    y4,
-                                    w4 as usize,
-                                    h4 as usize,
-                                    dirs,
-                                );
+                                let mut p = Part::new(x4, y4, w4 as usize, h4 as usize, dirs);
                                 p.ref0 = refs0[sm];
                                 p.ref1 = refs1[sm];
                                 p.mvd0 = mvd;
                                 b_parts.push(p);
-                            } else if let Some(p) = b_parts
-                                .iter_mut()
-                                .find(|p| p.x4 == x4 && p.y4 == y4 && p.w4 == w4 as usize && p.h4 == h4 as usize)
-                            {
+                            } else if let Some(p) = b_parts.iter_mut().find(|p| {
+                                p.x4 == x4
+                                    && p.y4 == y4
+                                    && p.w4 == w4 as usize
+                                    && p.h4 == h4 as usize
+                            }) {
                                 p.mvd1 = mvd;
                             }
                         }
@@ -1170,6 +1268,8 @@ fn mb_decode(
     }
 
     // ---- coded_block_pattern + mb_qp_delta (spec 7.3.5) ----
+    // B_Direct_16x16 codes cbp like any other inter MB (see the
+    // CABAC twin of this block).
     let (mut cbp_luma, mut cbp_chroma) = (0u8, 0u8);
     if mb_type != MbType::IPcm {
         if let MbType::I16x16 {
@@ -1198,18 +1298,23 @@ fn mb_decode(
             );
         }
     }
-    // transform_size_8x8_flag (spec 7.3.5): read when the PPS allows
-    // it, the MB is a non-16x16-intra type with coded luma, and every
-    // sub-mb is at least 8x8 (direct sub-mbs only count as 8x8 when
-    // `direct_8x8_inference_flag` is set).
+    // transform_size_8x8_flag (ffmpeg h264_cabac.c:2347:
+    // `dct8x8_allowed && (cbp&15) && !IS_INTRA`; dct8x8_allowed is the
+    // PPS flag narrowed by get_dct8x8_allowed for P_8x8/B_8x8).
     let dct8x8_allowed = cx.pps.transform_8x8_mode
         && !matches!(mb_type, MbType::I16x16 { .. } | MbType::IPcm)
-        && direct_mask != 0b1111
-        && !sub_small_8x8
-        && (sub_direct_allowed_8x8 || cx.sps.direct_8x8_inference);
+        && !sub_blocks_8x8
+        && (sub_direct_allowed_8x8 || cx.sps.direct_8x8_inference)
+        && (!matches!(mb_type, MbType::BDirect) || cx.sps.direct_8x8_inference);
     let t8x8 = dct8x8_allowed && cbp_luma > 0 && !mb_type.is_intra() && br.bit()?;
     m.direct_mask = direct_mask;
-    m.transform8x8 = t8x8;
+    // Intra keeps the I_8x8 flag read during mb_pred (ffmpeg
+    // h264_cavlc.c:797); inter takes the read here.
+    m.transform8x8 = if mb_type.is_intra() {
+        m.transform8x8
+    } else {
+        t8x8
+    };
     let coded = cbp_luma > 0 || cbp_chroma > 0 || matches!(mb_type, MbType::I16x16 { .. });
     let mut qp_y = cx.qp_prev;
     if coded && mb_type != MbType::IPcm {
@@ -1263,7 +1368,7 @@ fn mb_decode(
                 if cbp_luma & (1 << g) == 0 {
                     continue;
                 }
-                if t8x8 {
+                if m.transform8x8 {
                     // CAVLC 8x8: four 16-coefficient reads per group
                     // (spec 7.3.5.3.2), each scattered into the 8x8
                     // coefficient grid by `CAVLC_SCAN_8X8` — the same
@@ -1271,11 +1376,7 @@ fn mb_decode(
                     for s4 in 0..4usize {
                         let blk = g * 4 + s4;
                         let nc = nc_value(&pic.mbs, &nz_acc, map, blk, Plane::Luma);
-                        let r = cavlc::decode_block(
-                            br,
-                            nc,
-                            BlockKind::LumaOrChromaAc4x4,
-                        )?;
+                        let r = cavlc::decode_block(br, nc, BlockKind::LumaOrChromaAc4x4)?;
                         for k in 0..16 {
                             let ri = CAVLC_SCAN_8X8[16 * s4 + k] as usize;
                             luma_res8[g][ri] = r.levels[k];
@@ -1286,11 +1387,7 @@ fn mb_decode(
                     for s4 in 0..4usize {
                         let blk = g * 4 + s4;
                         let nc = nc_value(&pic.mbs, &nz_acc, map, blk, Plane::Luma);
-                        let r = cavlc::decode_block(
-                            br,
-                            nc,
-                            BlockKind::LumaOrChromaAc4x4,
-                        )?;
+                        let r = cavlc::decode_block(br, nc, BlockKind::LumaOrChromaAc4x4)?;
                         dbgln!(
                             "  cavlc blk {blk} nc {nc} tc {} pos {} lv {:?}",
                             r.total_coeff,
@@ -1363,13 +1460,15 @@ fn mb_decode(
             m.nz = [16; 24];
         }
         MbType::I4x4 => {
-            if t8x8 {
+            if m.transform8x8 {
                 // I_8x8: predict one 8x8 group at a time in raster
                 // order — each group reads the reconstructed samples
                 // of the earlier groups (spec 8.3.5.2 availability).
                 for (g, raw_resid) in luma_res8.iter().enumerate() {
                     let nb = gather_luma8x8(&pic.buf, &pic.mbs, map, g, cx.pps);
-                    let mode = m.i4x4_modes[(g / 2) * 4 * 4 + (g % 2) * 2];
+                    // Top-left 4x4 cell of this 8x8 group on the raster
+                    // mode grid: y*4 + x with (x, y) = (2*(g%2), 2*(g/2)).
+                    let mode = m.i4x4_modes[8 * (g / 2) + 2 * (g % 2)];
                     let mut pred = [0u8; 64];
                     intra::pred8x8(mode, &nb, &mut pred);
                     let mut resid = *raw_resid;
@@ -1479,6 +1578,7 @@ fn mb_decode(
                         let b = block_index(xx, yy);
                         m.mv[b] = mv;
                         m.ref_idx[b] = ref_idx;
+                        m.mv_valid[b] = true;
                     }
                 }
                 mc_partition(
@@ -1497,7 +1597,7 @@ fn mb_decode(
                 reconstruct_part(pic, cx, dpb, map, &mut m, *p)?;
             }
             // Add luma residual where cbp says coefficients exist.
-            if t8x8 {
+            if m.transform8x8 {
                 for (g, raw_resid) in luma_res8.iter().enumerate() {
                     if raw_resid.iter().all(|&v| v == 0) {
                         continue;
@@ -1632,6 +1732,7 @@ fn mc_partition(
     mv: [i32; 2],
     ref_idx: u8,
 ) -> Result<()> {
+    extern crate std;
     let ri = ref_idx as usize;
     let &ref_slot = cx
         .ref_order
@@ -1641,6 +1742,16 @@ fn mc_partition(
         .refs
         .get(ref_slot)
         .ok_or(Error::BadValue("ref slot missing"))?;
+    if x0 == 0 && y0 == 0 && pw == 8 && ph == 8 {
+        crate::dbgln!(
+            "MCPROBE mb(x0=0,y0=0,8x8) mv={:?} ref_idx={} slot={} poc={} list={:?}",
+            mv,
+            ref_idx,
+            ref_slot,
+            dpb.refs[ref_slot].poc,
+            cx.ref_order
+        );
+    }
     let mut luma = alloc::vec![0u8; pw * ph];
     inter::mc_luma(
         &rf.y,
@@ -1653,10 +1764,12 @@ fn mc_partition(
         ph,
         &mut luma,
     );
-    if let Some(wp) = &cx.h.wp_l0 {
-        if let Some(e) = wp.get(ri) {
-            if e.luma_flag {
-                inter::apply_wp(&mut luma, e.luma.0, e.luma.1, cx.h.wp_denom.0);
+    if std::env::var("NOWP").is_err() {
+        if let Some(wp) = &cx.h.wp_l0 {
+            if let Some(e) = wp.get(ri) {
+                if e.luma_flag {
+                    inter::apply_wp(&mut luma, e.luma.0, e.luma.1, cx.h.wp_denom.0);
+                }
             }
         }
     }
@@ -1854,6 +1967,7 @@ fn mvp_l0_parts(
     h4: usize,
     ref_idx: u8,
 ) -> [i16; 2] {
+    extern crate std;
     // Neighbour blocks (spec 6.4.11.7 / 8.4.1.3.2):
     //   A: the 4x4 block left of (x4, y4)
     //   B: above (x4, y4)
@@ -1868,8 +1982,47 @@ fn mvp_l0_parts(
     let (mv_b, ref_b) = b.unwrap_or(([0, 0], -1));
     let (mv_c, ref_c) = c.unwrap_or(([0, 0], -1));
     let ri = i32::from(ref_idx);
-    // Directional cases (spec 8-203..8-206 + sub-mb analogues).
-    if w4 * 4 == 16 && h4 * 4 == 8 {
+    if map.idx == 2 || map.idx == 8 || map.idx == 13 {
+        std::eprintln!(
+            "MVP mb{} x4={} y4={} w4={} h4={} ri={} A={:?} B={:?} C={:?}",
+            map.idx,
+            x4,
+            y4,
+            w4,
+            h4,
+            ref_idx,
+            a,
+            b,
+            c
+        );
+    }
+    if w4 == 1 && h4 == 1 {
+        if let Ok(s) = std::env::var("P4MV") {
+            if let Some((xs, ys)) = s.split_once(',') {
+                if map.idx == 8 {
+                    let xv: i16 = xs.trim().parse().unwrap_or(0);
+                    let yv: i16 = ys.trim().parse().unwrap_or(0);
+                    return [xv, yv];
+                }
+            }
+        }
+        if std::env::var("MVP4").is_ok() {
+            return match std::env::var("MVP4").as_deref() {
+                Ok("a") => mv_a,
+                Ok("b") => mv_b,
+                Ok("c") => mv_c,
+                _ => [0, 0],
+            };
+        }
+    }
+    // Directional single-candidate rules are MB-partition-only (spec
+    // 8.4.1.1 "If MbPartWidth is 16 and MbPartHeight is 8..." / the
+    // 8x16 analogue; ffmpeg keeps them in pred_16x8/pred_8x16_motion,
+    // called only from MB-partition decode). Sub-mb partitions
+    // (8x8/8x4/4x8/4x4) always take the median path — the previous
+    // 8x4/4x8 cases generalised the rules down to sub-mbs and broke
+    // every mixed-sub P8x8 MB in t2 (t2_8x8_part frame 1+).
+    if w4 == 4 && h4 == 2 {
         if y4 == 0 && ref_b == ri {
             return mv_b;
         }
@@ -1877,27 +2030,11 @@ fn mvp_l0_parts(
             return mv_a;
         }
     }
-    if w4 * 4 == 8 && h4 * 4 == 16 {
+    if w4 == 2 && h4 == 4 {
         if x4 == 0 && ref_a == ri {
             return mv_a;
         }
         if x4 == 2 && ref_c == ri {
-            return mv_c;
-        }
-    }
-    if w4 * 4 == 8 && h4 * 4 == 4 {
-        if y4 % 2 == 0 && ref_b == ri {
-            return mv_b;
-        }
-        if y4 % 2 == 1 && ref_a == ri {
-            return mv_a;
-        }
-    }
-    if w4 * 4 == 4 && h4 * 4 == 8 {
-        if x4 % 2 == 0 && ref_a == ri {
-            return mv_a;
-        }
-        if x4 % 2 == 1 && ref_c == ri {
             return mv_c;
         }
     }
@@ -1938,6 +2075,7 @@ fn mv_at(
     x: i32,
     y: i32,
 ) -> Option<([i16; 2], i32)> {
+    extern crate std;
     if (0..4).contains(&x) && (0..4).contains(&y) {
         let nb = cur?;
         let b = block_index(x as usize, y as usize);
@@ -1945,7 +2083,14 @@ fn mv_at(
             return Some(([0, 0], -1));
         }
         let r = nb.ref_idx[b];
-        return Some((nb.mv[b], if r == 0xff { -1 } else { i32::from(r) }));
+        // A same-MB block whose partition has not been decoded yet
+        // (ref 0xff or MV not committed — refs commit before mvds in
+        // P8x8) is an unavailable neighbour (spec 8.4.1.1), not a
+        // zero-motion candidate.
+        if r == 0xff || !nb.mv_valid[b] {
+            return None;
+        }
+        return Some((nb.mv[b], i32::from(r)));
     }
     let nidx = match (x < 0, y < 0) {
         (true, false) => map.mb_a(),
@@ -1972,6 +2117,9 @@ fn mv_at(
         return Some(([0, 0], -1));
     }
     let r = nb.ref_idx[b];
+    if !nb.mv_valid[b] {
+        return Some((nb.mv[b], -1));
+    }
     Some((nb.mv[b], if r == 0xff { -1 } else { i32::from(r) }))
 }
 
@@ -2218,8 +2366,17 @@ fn direct_dsf(cur_poc: i64, poc0: i64, poc1: i64) -> i32 {
 /// Maps a ref index on the colocated picture's list `l` back onto the
 /// current RefPicList0 via `frame_num` identity (the reference
 /// decoder's `map_col_to_list0`). Unmapped entries read as 0.
-fn col_ref_to_l0(col_frame: &crate::dpb::RefFrame, ref_col: u8, l: usize, cur_l0_fns: &[u32]) -> u8 {
-    let fns = if l == 0 { &col_frame.ref_l0_fns } else { &col_frame.ref_l1_fns };
+fn col_ref_to_l0(
+    col_frame: &crate::dpb::RefFrame,
+    ref_col: u8,
+    l: usize,
+    cur_l0_fns: &[u32],
+) -> u8 {
+    let fns = if l == 0 {
+        &col_frame.ref_l0_fns
+    } else {
+        &col_frame.ref_l1_fns
+    };
     let Some(&want) = fns.get(ref_col as usize) else {
         return 0;
     };
@@ -2254,8 +2411,39 @@ fn mc_partition_bi(
     debug_assert!(ref0 >= 0 || ref1 >= 0);
     let luma0 = if ref0 >= 0 {
         let rf = &dpb.refs[cx.ref_order[ref0 as usize]];
+        if x0 == 0 && y0 == 0 && pw == 8 && ph == 8 {
+            crate::dbgln!(
+                "MCPROBE mv={:?} ref0={} slot={} poc={} list={:?}",
+                mv0,
+                ref0,
+                cx.ref_order[ref0 as usize],
+                rf.poc,
+                cx.ref_order
+            );
+        }
         let mut p = alloc::vec![0u8; pw * ph];
-        inter::mc_luma(&rf.y, buf.w, buf.h, x0 as i32, y0 as i32, (mv0[0], mv0[1]), pw, ph, &mut p);
+        inter::mc_luma(
+            &rf.y,
+            buf.w,
+            buf.h,
+            x0 as i32,
+            y0 as i32,
+            (mv0[0], mv0[1]),
+            pw,
+            ph,
+            &mut p,
+        );
+        if (x0, y0) == (0, 0) || (x0, y0) == (16, 48) || (x0 == 32 || x0 == 40) && y0 < 16 {
+            crate::dbgln!(
+                "MCPRED pw={} ph={} mv={:?} ref0={} poc={} row0={:?}",
+                pw,
+                ph,
+                mv0,
+                ref0,
+                rf.poc,
+                &p[..pw.min(8)]
+            );
+        }
         Some(p)
     } else {
         None
@@ -2263,7 +2451,17 @@ fn mc_partition_bi(
     let luma1 = if ref1 >= 0 {
         let rf = &dpb.refs[cx.ref_order1[ref1 as usize]];
         let mut p = alloc::vec![0u8; pw * ph];
-        inter::mc_luma(&rf.y, buf.w, buf.h, x0 as i32, y0 as i32, (mv1[0], mv1[1]), pw, ph, &mut p);
+        inter::mc_luma(
+            &rf.y,
+            buf.w,
+            buf.h,
+            x0 as i32,
+            y0 as i32,
+            (mv1[0], mv1[1]),
+            pw,
+            ph,
+            &mut p,
+        );
         Some(p)
     } else {
         None
@@ -2298,8 +2496,20 @@ fn mc_partition_bi(
             if cx.h.wp_l0.is_some() && cx.h.wp_l1.is_some() {
                 let e0 = cx.h.wp_l0.as_ref().and_then(|w| w.get(ref0 as usize));
                 let e1 = cx.h.wp_l1.as_ref().and_then(|w| w.get(ref1 as usize));
-                let w0 = e0.map(|e| if e.luma_flag { e.luma.0 } else { 1 << cx.h.wp_denom.0 });
-                let w1 = e1.map(|e| if e.luma_flag { e.luma.0 } else { 1 << cx.h.wp_denom.0 });
+                let w0 = e0.map(|e| {
+                    if e.luma_flag {
+                        e.luma.0
+                    } else {
+                        1 << cx.h.wp_denom.0
+                    }
+                });
+                let w1 = e1.map(|e| {
+                    if e.luma_flag {
+                        e.luma.0
+                    } else {
+                        1 << cx.h.wp_denom.0
+                    }
+                });
                 let o = e0.map(|e| e.luma.1).unwrap_or(0) + e1.map(|e| e.luma.1).unwrap_or(0);
                 let d = cx.h.wp_denom.0;
                 for i in 0..pw * ph {
@@ -2313,9 +2523,7 @@ fn mc_partition_bi(
                 // Implicit weights via the per-slice table on `cx`.
                 for i in 0..pw * ph {
                     let w0 = cx.iw0(ref0 as usize, ref1 as usize);
-                    luma[i] = (((i32::from(p0[i]) * w0 + i32::from(p1[i]) * (64 - w0))
-                        + 32)
-                        >> 6)
+                    luma[i] = (((i32::from(p0[i]) * w0 + i32::from(p1[i]) * (64 - w0)) + 32) >> 6)
                         .clamp(0, 255) as u8;
                 }
             } else {
@@ -2397,9 +2605,26 @@ fn mc_partition_bi(
                 if cx.h.wp_l0.is_some() && cx.h.wp_l1.is_some() {
                     let e0 = cx.h.wp_l0.as_ref().and_then(|w| w.get(ref0 as usize));
                     let e1 = cx.h.wp_l1.as_ref().and_then(|w| w.get(ref1 as usize));
-                    let w0 = e0.map(|e| if e.chroma_flag { e.chroma[c].0 } else { 1 << cx.h.wp_denom.1 }).unwrap_or(1 << cx.h.wp_denom.1);
-                    let w1 = e1.map(|e| if e.chroma_flag { e.chroma[c].0 } else { 1 << cx.h.wp_denom.1 }).unwrap_or(1 << cx.h.wp_denom.1);
-                    let o = e0.map(|e| e.chroma[c].1).unwrap_or(0) + e1.map(|e| e.chroma[c].1).unwrap_or(0);
+                    let w0 = e0
+                        .map(|e| {
+                            if e.chroma_flag {
+                                e.chroma[c].0
+                            } else {
+                                1 << cx.h.wp_denom.1
+                            }
+                        })
+                        .unwrap_or(1 << cx.h.wp_denom.1);
+                    let w1 = e1
+                        .map(|e| {
+                            if e.chroma_flag {
+                                e.chroma[c].0
+                            } else {
+                                1 << cx.h.wp_denom.1
+                            }
+                        })
+                        .unwrap_or(1 << cx.h.wp_denom.1);
+                    let o = e0.map(|e| e.chroma[c].1).unwrap_or(0)
+                        + e1.map(|e| e.chroma[c].1).unwrap_or(0);
                     let d = cx.h.wp_denom.1;
                     for i in 0..cw2 * ch2 {
                         out[i] = (((i32::from(p0[i]) * w0 + i32::from(p1[i]) * w1)
@@ -2410,8 +2635,7 @@ fn mc_partition_bi(
                 } else if cx.pps.weighted_bipred_idc == 2 {
                     for i in 0..cw2 * ch2 {
                         let w0 = cx.iw0(ref0 as usize, ref1 as usize);
-                        out[i] = (((i32::from(p0[i]) * w0 + i32::from(p1[i]) * (64 - w0))
-                            + 32)
+                        out[i] = (((i32::from(p0[i]) * w0 + i32::from(p1[i]) * (64 - w0)) + 32)
                             >> 6)
                             .clamp(0, 255) as u8;
                     }
@@ -2464,6 +2688,7 @@ fn direct_motion(
     let col_mb = col_frame.coloc.get(idx);
     let px0 = map.x * 16;
     let py0 = map.y * 16;
+    extern crate std;
     let inference = cx.sps.direct_8x8_inference;
 
     if cx.h.direct_spatial {
@@ -2493,19 +2718,12 @@ fn direct_motion(
                 let (cv, cr) = c.map(|(m, r)| (m, r)).unwrap_or(([0, 0], -1));
                 let matches = [ar == min_r, br == min_r, cr == min_r];
                 let cnt = matches.iter().filter(|&&f| f).count();
+                // ffmpeg pred_spatial_direct_motion: match_count > 1
+                // takes mid_pred over the RAW A/B/C vectors (no
+                // zero-padding of non-matching neighbours); a single
+                // match takes that neighbour verbatim.
                 mv_l[l] = if cnt > 1 {
-                    [
-                        med3(
-                            if ar == min_r { av[0] } else { 0 },
-                            if br == min_r { bv[0] } else { 0 },
-                            if cr == min_r { cv[0] } else { 0 },
-                        ),
-                        med3(
-                            if ar == min_r { av[1] } else { 0 },
-                            if br == min_r { bv[1] } else { 0 },
-                            if cr == min_r { cv[1] } else { 0 },
-                        ),
-                    ]
+                    [med3(av[0], bv[0], cv[0]), med3(av[1], bv[1], cv[1])]
                 } else if ar == min_r {
                     av
                 } else if br == min_r {
@@ -2516,6 +2734,10 @@ fn direct_motion(
             }
         }
         if ref_l[0] < 0 && ref_l[1] < 0 {
+            // ffmpeg pred_spatial_direct_motion (h264_direct.c):
+            // per-list -1 keeps that list unused in the MC; only when
+            // both lists lack a non-negative neighbour refIdx do both
+            // fall back to ref 0, mv 0 (spec 8.4.1.2.2).
             ref_l = [0, 0];
             mv_l = [[0, 0]; 2];
         }
@@ -2556,6 +2778,19 @@ fn direct_motion(
                     }
                 }
             }
+            if std::env::var("DIRECTDBG").is_ok() {
+                std::eprintln!(
+                    "SD poc={} mb=({},{}) g={} refL={:?},{:?} a={:?} b={:?}",
+                    cx.cur_poc,
+                    map.x,
+                    map.y,
+                    g,
+                    ref_l[0],
+                    ref_l[1],
+                    a,
+                    b
+                );
+            }
             let (w4, h4) = if inference { (2, 2) } else { (1, 1) };
             for yy in 0..h4 * (if inference { 1 } else { 2 }) {
                 for xx in 0..w4 * (if inference { 1 } else { 2 }) {
@@ -2563,6 +2798,7 @@ fn direct_motion(
                     let b4 = block_index(x4, y4);
                     m.mv[b4] = if ref_l[0] >= 0 { a } else { [0, 0] };
                     m.ref_idx[b4] = if ref_l[0] >= 0 { ref_l[0] as u8 } else { 0xff };
+                    m.mv_valid[b4] = ref_l[0] >= 0;
                     m.mv_l1[b4] = if ref_l[1] >= 0 { b } else { [0, 0] };
                     m.ref_idx_l1[b4] = if ref_l[1] >= 0 { ref_l[1] as u8 } else { 0xff };
                 }
@@ -2645,8 +2881,16 @@ fn direct_motion(
                     } else {
                         (1usize, cm.ref_l1[g])
                     };
-                    let mv = if list == 0 { cm.mv_l0[b4] } else { cm.mv_l1[b4] };
-                    let mv1 = if list == 0 { cm.mv_l1[b4] } else { cm.mv_l0[b4] };
+                    let mv = if list == 0 {
+                        cm.mv_l0[b4]
+                    } else {
+                        cm.mv_l1[b4]
+                    };
+                    let mv1 = if list == 0 {
+                        cm.mv_l1[b4]
+                    } else {
+                        cm.mv_l0[b4]
+                    };
                     let r0 = i32::from(col_ref_to_l0(col_frame, rcol, list, cx.ref_l0_fns));
                     (r0, mv, mv1)
                 }
@@ -2671,11 +2915,41 @@ fn direct_motion(
                 (i32::from(mv0[0]) - i32::from(mv_c0[0])) as i16,
                 (i32::from(mv0[1]) - i32::from(mv_c0[1])) as i16,
             ];
+            if std::env::var("DIRECTDBG").is_ok() {
+                let (dbg_list, dbg_rcol) = col_mb
+                    .as_ref()
+                    .map(|cm| {
+                        if cm.intra {
+                            (0usize, 0xffu8)
+                        } else if cm.ref_l0[g] != 0xff {
+                            (0usize, cm.ref_l0[g])
+                        } else {
+                            (1usize, cm.ref_l1[g])
+                        }
+                    })
+                    .unwrap_or((0usize, 0xffu8));
+                std::eprintln!(
+                    "TD poc={} mb=({},{}) g={} intra={:?} list={} rcol={} r0={} scale={} mv_c={:?} mv0={:?} mv1={:?}",
+                    cx.cur_poc,
+                    map.x,
+                    map.y,
+                    g,
+                    col_mb.as_ref().map(|c| c.intra),
+                    dbg_list,
+                    dbg_rcol,
+                    r0,
+                    scale,
+                    mv_c0,
+                    mv0,
+                    mv1
+                );
+            }
             for yy in 0..2usize {
                 for xx in 0..2usize {
                     let b4 = block_index(gx + xx, gy + yy);
                     m.mv[b4] = mv0;
                     m.ref_idx[b4] = r0 as u8;
+                    m.mv_valid[b4] = true;
                     m.mv_l1[b4] = mv1;
                     m.ref_idx_l1[b4] = 0;
                 }
@@ -2708,7 +2982,11 @@ fn direct_motion(
                             } else {
                                 (1usize, cm.ref_l1[g])
                             };
-                            let mv = if list == 0 { cm.mv_l0[b4] } else { cm.mv_l1[b4] };
+                            let mv = if list == 0 {
+                                cm.mv_l0[b4]
+                            } else {
+                                cm.mv_l1[b4]
+                            };
                             let r0 = i32::from(col_ref_to_l0(col_frame, rcol, list, cx.ref_l0_fns));
                             (r0, mv)
                         }
@@ -2735,6 +3013,7 @@ fn direct_motion(
                     ];
                     m.mv[b4] = mv0;
                     m.ref_idx[b4] = r0 as u8;
+                    m.mv_valid[b4] = true;
                     m.mv_l1[b4] = mv1;
                     m.ref_idx_l1[b4] = 0;
                     mc_partition_bi(
@@ -2767,14 +3046,27 @@ fn mv_at_l(
     y: i32,
     l: usize,
 ) -> Option<([i16; 2], i32)> {
+    extern crate std;
     if (0..4).contains(&x) && (0..4).contains(&y) {
         let nb = cur?;
         let b = block_index(x as usize, y as usize);
         if nb.mb_type.is_intra() {
             return Some(([0, 0], -1));
         }
-        let (mvv, r) = if l == 0 { (nb.mv[b], nb.ref_idx[b]) } else { (nb.mv_l1[b], nb.ref_idx_l1[b]) };
-        return Some((mvv, if r == 0xff { -1 } else { i32::from(r) }));
+        let (mvv, r) = if l == 0 {
+            (nb.mv[b], nb.ref_idx[b])
+        } else {
+            (nb.mv_l1[b], nb.ref_idx_l1[b])
+        };
+        // Undecoded same-MB partitions are unavailable neighbours
+        // (spec 8.4.1.1): returning a fake candidate would suppress the
+        // C->D fallback below. A decoded-ref-but-MV-uncommitted block
+        // (refs decode before mvds in P8x8) is likewise unavailable.
+        // L1 has no validity flag yet — gate L0 only.
+        if r == 0xff || l == 0 && !nb.mv_valid[b] {
+            return None;
+        }
+        return Some((mvv, i32::from(r)));
     }
     let nidx = match (x < 0, y < 0) {
         (true, false) => map.mb_a(),
@@ -2796,7 +3088,14 @@ fn mv_at_l(
     if nb.mb_type.is_intra() {
         return Some(([0, 0], -1));
     }
-    let (mvv, r) = if l == 0 { (nb.mv[b], nb.ref_idx[b]) } else { (nb.mv_l1[b], nb.ref_idx_l1[b]) };
+    let (mvv, r) = if l == 0 {
+        (nb.mv[b], nb.ref_idx[b])
+    } else {
+        (nb.mv_l1[b], nb.ref_idx_l1[b])
+    };
+    if l == 0 && !nb.mv_valid[b] {
+        return Some((mvv, -1));
+    }
     Some((mvv, if r == 0xff { -1 } else { i32::from(r) }))
 }
 
@@ -2818,7 +3117,15 @@ fn slice_data_cabac(
     if mb_idx > total {
         return Err(Error::BadValue("first_mb_in_slice past picture"));
     }
-    crate::dbgln!("cabac init: off={} init_idc={} qp_prev={} st={:?} pps_qp={} sqd={}", cabac_off, cx.h.cabac_init_idc, cx.qp_prev, cx.h.slice_type, cx.pps.pic_init_qp, cx.h.slice_qp_delta);
+    crate::dbgln!(
+        "cabac init: off={} init_idc={} qp_prev={} st={:?} pps_qp={} sqd={}",
+        cabac_off,
+        cx.h.cabac_init_idc,
+        cx.qp_prev,
+        cx.h.slice_type,
+        cx.pps.pic_init_qp,
+        cx.h.slice_qp_delta
+    );
     let mut cab = cabac::Cabac::new(
         &rbsp[cabac_off..],
         cx.h.slice_type,
@@ -2831,7 +3138,11 @@ fn slice_data_cabac(
         let skipped = match cx.h.slice_type {
             SliceType::I => false,
             _ => {
-                let base = if cx.h.slice_type == SliceType::B { 13 } else { 0 };
+                let base = if cx.h.slice_type == SliceType::B {
+                    13
+                } else {
+                    0
+                };
                 let mut c = base;
                 // EXPERIMENT: strict spec edge availability.
                 if mb_idx % wm > 0 {
@@ -2860,7 +3171,12 @@ fn slice_data_cabac(
             }
         } else {
             mb_decode_cabac(pic, &mut cab, cx, dpb, mb_idx, wm)?;
-            dbgln!("  mb{} done type={:?} pos={}", mb_idx, pic.mbs.get(mb_idx).map(|m| m.mb_type), cab.pos());
+            dbgln!(
+                "  mb{} done type={:?} pos={}",
+                mb_idx,
+                pic.mbs.get(mb_idx).map(|m| m.mb_type),
+                cab.pos()
+            );
         }
         mb_idx += 1;
         if mb_idx >= total {
@@ -2885,6 +3201,7 @@ fn mb_decode_cabac(
     idx: usize,
     wm: usize,
 ) -> Result<()> {
+    extern crate std;
     let map = MbMap {
         idx,
         x: idx % wm,
@@ -2898,10 +3215,14 @@ fn mb_decode_cabac(
         SliceType::I => {
             // ctx 3+min(2, intra16-neighbour-count).
             let mut cnt = 0usize;
-            if nb_at(&pic.mbs, map.mb_a(), cx.slice_id).map_or(false, |m| matches!(m.mb_type, MbType::I16x16 { .. } | MbType::IPcm)) {
+            if nb_at(&pic.mbs, map.mb_a(), cx.slice_id).map_or(false, |m| {
+                matches!(m.mb_type, MbType::I16x16 { .. } | MbType::IPcm)
+            }) {
                 cnt += 1;
             }
-            if nb_at(&pic.mbs, map.mb_b(), cx.slice_id).map_or(false, |m| matches!(m.mb_type, MbType::I16x16 { .. } | MbType::IPcm)) {
+            if nb_at(&pic.mbs, map.mb_b(), cx.slice_id).map_or(false, |m| {
+                matches!(m.mb_type, MbType::I16x16 { .. } | MbType::IPcm)
+            }) {
                 cnt += 1;
             }
             let code = cab.i_mb_type(cnt)?;
@@ -2917,13 +3238,13 @@ fn mb_decode_cabac(
             }
         }
         SliceType::B => {
-            // ctx 27 + non-direct-neighbour count.
+            // ctx 27 + non-direct-neighbour count. "Direct" at MB level
+            // means ONLY B_Direct_16x16 / B_Skip (ffmpeg IS_DIRECT =
+            // MB_TYPE_DIRECT2); a B_8x8 whose SUB-partitions are direct
+            // is NOT MB-level direct and must still count here.
             let mut cnt = 0usize;
-            let nondirect = |m: &MbState| {
-                m.mb_type != MbType::BDirect
-                    && m.mb_type != MbType::BSkip
-                    && m.direct_mask == 0
-            };
+            let nondirect =
+                |m: &MbState| m.mb_type != MbType::BDirect && m.mb_type != MbType::BSkip;
             if nb_at(&pic.mbs, map.mb_a(), cx.slice_id).map_or(false, nondirect) {
                 cnt += 1;
             }
@@ -2952,6 +3273,11 @@ fn mb_decode_cabac(
     // `part`: (x4, y4, w4, h4) geometry; L0/L1 ref+mvd pairs.
     let mut inter_parts: Vec<Part> = Vec::new();
     let mut direct_mask = 0u8;
+    // ffmpeg `get_dct8x8_allowed` (h264_mvpred.h:157): any sub-mb
+    // partitioned below 8x8 (8x4/4x8/4x4) blocks
+    // transform_size_8x8_flag; B_Direct also blocks it without
+    // direct_8x8_inference.
+    let mut sub_blocks_8x8 = false;
     match mb_type {
         MbType::I4x4 => {
             // ctxIdx 399 transform_size_8x8_flag (spec Table 9-11
@@ -2963,6 +3289,8 @@ fn mb_decode_cabac(
                 for blk in 0..4 {
                     let g = blk * 4;
                     let mpm = i4x4_mpm(&pic.mbs, &m, map, g);
+                    // Same reader as 4x4 (ffmpeg decode_cabac_mb_
+                    // intra4x4_pred_mode with i += 4): no skip-3.
                     let mode = cab.intra4x4_mode(mpm)?;
                     for i in 0..4 {
                         let (bx, by) = block_xy(g + i);
@@ -2975,7 +3303,16 @@ fn mb_decode_cabac(
                     let r = by * 4 + bx;
                     let mpm = i4x4_mpm(&pic.mbs, &m, map, blk);
                     let mode = cab.intra4x4_mode(mpm)?;
-                    dbgln!("    i4x4 mb{} blk{} bx{} by{} mpm={} mode={} pos={}", map.idx, blk, bx, by, mpm, mode, cab.pos());
+                    dbgln!(
+                        "    i4x4 mb{} blk{} bx{} by{} mpm={} mode={} pos={}",
+                        map.idx,
+                        blk,
+                        bx,
+                        by,
+                        mpm,
+                        mode,
+                        cab.pos()
+                    );
                     m.i4x4_modes[r] = mode;
                 }
             }
@@ -3006,13 +3343,10 @@ fn mb_decode_cabac(
             inter_parts.push(p);
         }
         MbType::BPart { p0, p1 } => {
-            let mut ps = [
-                Part::new(0, 0, p0.0 as usize, p0.1 as usize, p0.2),
-                {
-                    let g = part_geo_b(0, p0.0, p0.1);
-                    Part::new(g.0, g.1, g.2, g.3, p1.2)
-                },
-            ];
+            let mut ps = [Part::new(0, 0, p0.0 as usize, p0.1 as usize, p0.2), {
+                let g = part_geo_b(0, p0.0, p0.1);
+                Part::new(g.0, g.1, g.2, g.3, p1.2)
+            }];
             cabac_read_refs_mvds(pic, cab, cx, map, &mut m, &mut ps, 2)?;
             inter_parts.extend_from_slice(&ps);
         }
@@ -3020,6 +3354,40 @@ fn mb_decode_cabac(
             let mut subs = [SubMbType::BDirect; 4];
             for st in subs.iter_mut() {
                 *st = SubMbType::from_code_b(u32::from(cab.b_sub_type()?))?;
+            }
+            // x264 writes the flag only when every sub is an 8x8
+            // partition (BInter w4==h4==2); direct subs block without
+            // direct_8x8_inference.
+            for st in &subs {
+                match st {
+                    SubMbType::BDirect => {
+                        if !cx.sps.direct_8x8_inference {
+                            sub_blocks_8x8 = true;
+                        }
+                    }
+                    SubMbType::BInter { w4, h4, .. } => {
+                        if !(w4 == &2 && h4 == &2) {
+                            sub_blocks_8x8 = true;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            // ffmpeg runs pred_direct_motion immediately after the
+            // sub-mb-type reads (h264_cabac.c:2124), BEFORE ref_idx and
+            // mvd: the direct groups' mv/ref caches are populated so a
+            // later sub-partition's MVP (and the ref/amvd contexts)
+            // already see the direct motion — e.g. sub2's MVP in a
+            // B_8x8 reads the 4x4 left of (0,2) = direct sub1's derived
+            // mv, which is unavailable if direct motion is deferred to
+            // reconstruction.
+            for (sm, st) in subs.iter().enumerate() {
+                if *st == SubMbType::BDirect {
+                    direct_mask |= 1 << sm;
+                }
+            }
+            if direct_mask != 0 {
+                direct_motion(pic, cx, dpb, idx, wm, &mut m, direct_mask)?;
             }
             // ref_idx per direction-bearing sub-mb (spec Table 7-18:
             // direct subs carry no ref/mvd).
@@ -3033,11 +3401,16 @@ fn mb_decode_cabac(
                     direct_mask |= 1 << sm;
                     continue;
                 }
-                if let SubMbType::BInter { w4, h4, nparts, dirs } = st {
+                if let SubMbType::BInter {
+                    w4,
+                    h4,
+                    nparts,
+                    dirs,
+                } = st
+                {
                     for pi in 0..nparts as usize {
                         let (px, py) = b_part_xy(st, pi);
-                        let mut p =
-                            Part::new(sx + px, sy + py, w4 as usize, h4 as usize, dirs);
+                        let mut p = Part::new(sx + px, sy + py, w4 as usize, h4 as usize, dirs);
                         p.ref0 = refs0[sm];
                         p.ref1 = refs1[sm];
                         inter_parts.push(p);
@@ -3066,7 +3439,21 @@ fn mb_decode_cabac(
             let mut sub_types = [SubMbType::S8x8; 4];
             for (i, st) in sub_types.iter_mut().enumerate() {
                 *st = SubMbType::from_code(u32::from(cab.p_sub_type()?))?;
-                dbgln!("  sub mb{} sm{} type={:?} pos={}", map.idx, i, *st, cab.pos());
+                dbgln!(
+                    "  sub mb{} sm{} type={:?} pos={}",
+                    map.idx,
+                    i,
+                    *st,
+                    cab.pos()
+                );
+            }
+            // ffmpeg ff_h264_p_sub_mb_type_info (h264data.c): sub code
+            // 3 (4x4 partitions) maps to MB_TYPE_8x8 which *blocks*
+            // the flag — the flag bit exists only when every sub is
+            // an 8x8 partition.
+            if std::env::var("NOSUBBLK").is_ok() {
+            } else if sub_types.iter().any(|st| !matches!(st, SubMbType::S8x8)) {
+                sub_blocks_8x8 = true;
             }
             let mut refs = [0u8; 4];
             if cx.h.num_ref_idx_l0_active > 1 && mb_type != MbType::P8x8Ref0 {
@@ -3074,7 +3461,14 @@ fn mb_decode_cabac(
                     let (x4, y4) = ((sm % 2) * 2, (sm / 2) * 2);
                     let ctx_i = cabac_ref_ctx(&pic.mbs, &m, map, x4, y4, 0);
                     *r = cab.ref_idx(ctx_i)? as u8;
-                    dbgln!("refidx8 mb{} sm{} ctx={} r={} pos={}", map.idx, sm, ctx_i, *r, cab.pos());
+                    dbgln!(
+                        "refidx8 mb{} sm{} ctx={} r={} pos={}",
+                        map.idx,
+                        sm,
+                        ctx_i,
+                        *r,
+                        cab.pos()
+                    );
                     if *r as usize >= cx.h.num_ref_idx_l0_active as usize {
                         return Err(Error::BadValue("ref_idx_l0 out of list"));
                     }
@@ -3115,7 +3509,15 @@ fn mb_decode_cabac(
                     let ctx_i = cabac_ref_ctx(&pic.mbs, &m, map, x4, y4, 0);
                     *r = cab.ref_idx(ctx_i)? as u8;
                     let _ = (x4, y4, w4, h4);
-                    dbgln!("refidx mb{} pi{} type={:?} ctx={} r={} active={}", idx, pi, mb_type, ctx_i, *r, cx.h.num_ref_idx_l0_active);
+                    dbgln!(
+                        "refidx mb{} pi{} type={:?} ctx={} r={} active={}",
+                        idx,
+                        pi,
+                        mb_type,
+                        ctx_i,
+                        *r,
+                        cx.h.num_ref_idx_l0_active
+                    );
                     if *r as usize >= cx.h.num_ref_idx_l0_active as usize {
                         return Err(Error::BadValue("ref_idx_l0 out of list"));
                     }
@@ -3140,6 +3542,10 @@ fn mb_decode_cabac(
     m.direct_mask = direct_mask;
 
     // ---- coded_block_pattern + transform_8x8 + qp_delta ----
+    // B_Direct_16x16 DOES code cbp (spec 7.3.5.1: coded_block_pattern
+    // is emitted whenever MbPartPredMode != Intra_16x16/I_PCM — the
+    // Direct exemption covers only mb_pred's ref_idx/mvd fields;
+    // ffmpeg h264_cabac.c gate is `!IS_INTRA16x16(mb_type)` alone).
     let (mut cbp_luma, mut cbp_chroma) = (0u8, 0u8);
     if mb_type != MbType::IPcm {
         if let MbType::I16x16 {
@@ -3181,18 +3587,29 @@ fn mb_decode_cabac(
         }
     }
     m.cbp = (cbp_chroma << 4) | cbp_luma;
-    dbgln!("mb{} cbp={:02x} luma={} chroma={} pos={}", map.idx, m.cbp, cbp_luma, cbp_chroma, cab.pos());
-    // transform_size_8x8_flag (only when allowed, luma cbp non-zero,
-    // inter MB). Intra I_8x8 is not implemented (see sps gate).
+    dbgln!(
+        "mb{} cbp={:02x} luma={} chroma={} pos={}",
+        map.idx,
+        m.cbp,
+        cbp_luma,
+        cbp_chroma,
+        cab.pos()
+    );
+    // transform_size_8x8_flag (ffmpeg h264_cabac.c:2347:
+    // `dct8x8_allowed && (cbp&15) && !IS_INTRA`; dct8x8_allowed is the
+    // PPS flag narrowed by get_dct8x8_allowed for P_8x8/B_8x8).
     let mut t8x8 = false;
     if !mb_type.is_intra()
         && cx.pps.transform_8x8_mode
         && cbp_luma > 0
-        && direct_mask != 0b1111
+        && !sub_blocks_8x8
+        && (!matches!(mb_type, MbType::BDirect) || cx.sps.direct_8x8_inference)
     {
-        let ctx399 = usize::from(
-            nb_at(&pic.mbs, map.mb_a(), cx.slice_id).map_or(false, |n| n.transform8x8),
-        ) + usize::from(nb_at(&pic.mbs, map.mb_b(), cx.slice_id).map_or(false, |n| n.transform8x8));
+        let ctx399 =
+            usize::from(nb_at(&pic.mbs, map.mb_a(), cx.slice_id).map_or(false, |n| n.transform8x8))
+                + usize::from(
+                    nb_at(&pic.mbs, map.mb_b(), cx.slice_id).map_or(false, |n| n.transform8x8),
+                );
         t8x8 = cab.transform_8x8(ctx399)?;
     }
     m.transform8x8 = t8x8;
@@ -3200,7 +3617,13 @@ fn mb_decode_cabac(
     let mut qp_y = cx.qp_prev;
     if coded && mb_type != MbType::IPcm {
         let delta = cab.qp_delta(cx.qp_delta_prev)?;
-        dbgln!("mb{} qp_delta={} prev={} pos={}", map.idx, delta, cx.qp_delta_prev, cab.pos());
+        dbgln!(
+            "mb{} qp_delta={} prev={} pos={}",
+            map.idx,
+            delta,
+            cx.qp_delta_prev,
+            cab.pos()
+        );
         qp_y = (i64::from(cx.qp_prev) + i64::from(delta)).rem_euclid(52) as i32;
         cx.qp_prev = qp_y;
         cx.qp_delta_prev = delta;
@@ -3228,6 +3651,13 @@ fn mb_decode_cabac(
             // always intra: missing neighbours default DC-coded (0x7CF).
             let cbf_ctx = dc_cbf_ctx(&pic.mbs, map, 0, true);
             let r = cabac::decode_residual(cab, ResCat::LumaDc16x16, cbf_ctx, &ZIGZAG_4X4)?;
+            dbgln!(
+                "  i16dc mb{} tc={} levels={:?} pos={}",
+                map.idx,
+                r.total_coeff,
+                &r.levels[..16],
+                cab.pos()
+            );
             for s in 0..16 {
                 dc_y[ZIGZAG_4X4[s] as usize] = r.levels[s];
             }
@@ -3240,13 +3670,28 @@ fn mb_decode_cabac(
                 }
                 for s4 in 0..4usize {
                     let blk = g * 4 + s4;
-                    let cbf_ctx = nc_cbf_ctx(&pic.mbs, &nz_acc, map, blk, Plane::Luma, m.mb_type.is_intra());
+                    let cbf_ctx = nc_cbf_ctx(
+                        &pic.mbs,
+                        &nz_acc,
+                        map,
+                        blk,
+                        Plane::Luma,
+                        m.mb_type.is_intra(),
+                    );
                     let r = cabac::decode_residual(
                         cab,
                         ResCat::LumaAc16x16,
                         cbf_ctx,
                         &ZIGZAG_4X4[1..],
                     )?;
+                    dbgln!(
+                        "  i16ac mb{} blk{} tc={} levels={:?} pos={}",
+                        map.idx,
+                        blk,
+                        r.total_coeff,
+                        &r.levels[..15],
+                        cab.pos()
+                    );
                     for s in 0..15 {
                         luma_res[blk][ZIGZAG_4X4[s + 1] as usize] = r.levels[s];
                     }
@@ -3259,13 +3704,9 @@ fn mb_decode_cabac(
                     continue;
                 }
                 let blk = g * 4;
-                let cbf_ctx = nc_cbf_ctx(&pic.mbs, &nz_acc, map, blk, Plane::Luma, m.mb_type.is_intra());
-                let r = cabac::decode_residual(
-                    cab,
-                    ResCat::Luma8x8,
-                    cbf_ctx,
-                    &ZIGZAG_8X8,
-                )?;
+                // No cbf bin for luma 8x8 (ffmpeg ff_h264_cabac.c:1859);
+                // the cbp luma bit already gated this group.
+                let r = cabac::decode_residual(cab, ResCat::Luma8x8, 0, &ZIGZAG_8X8)?;
                 for s in 0..64 {
                     luma_res8[g][ZIGZAG_8X8[s] as usize] = r.levels[s];
                 }
@@ -3280,14 +3721,22 @@ fn mb_decode_cabac(
                 }
                 for s4 in 0..4usize {
                     let blk = g * 4 + s4;
-                    let cbf_ctx = nc_cbf_ctx(&pic.mbs, &nz_acc, map, blk, Plane::Luma, m.mb_type.is_intra());
-                    let r = cabac::decode_residual(
-                        cab,
-                        ResCat::Luma4x4,
-                        cbf_ctx,
-                        &ZIGZAG_4X4,
-                    )?;
-                    dbgln!("  resid mb{} blk{} tc={} pos={}", map.idx, blk, r.total_coeff, cab.pos());
+                    let cbf_ctx = nc_cbf_ctx(
+                        &pic.mbs,
+                        &nz_acc,
+                        map,
+                        blk,
+                        Plane::Luma,
+                        m.mb_type.is_intra(),
+                    );
+                    let r = cabac::decode_residual(cab, ResCat::Luma4x4, cbf_ctx, &ZIGZAG_4X4)?;
+                    dbgln!(
+                        "  resid mb{} blk{} tc={} pos={}",
+                        map.idx,
+                        blk,
+                        r.total_coeff,
+                        cab.pos()
+                    );
                     for s in 0..16 {
                         luma_res[blk][ZIGZAG_4X4[s] as usize] = r.levels[s];
                     }
@@ -3298,12 +3747,7 @@ fn mb_decode_cabac(
         if cbp_chroma > 0 {
             for (c, dc) in chroma_dc.iter_mut().enumerate() {
                 let cbf_ctx = dc_cbf_ctx(&pic.mbs, map, 1 + c, mb_type.is_intra());
-                let r = cabac::decode_residual(
-                    cab,
-                    ResCat::ChromaDc,
-                    cbf_ctx,
-                    &SCAN_2X2,
-                )?;
+                let r = cabac::decode_residual(cab, ResCat::ChromaDc, cbf_ctx, &SCAN_2X2)?;
                 *dc = [r.levels[0], r.levels[1], r.levels[2], r.levels[3]];
                 if r.total_coeff > 0 {
                     m.dc_coded |= 1 << (1 + c);
@@ -3313,8 +3757,14 @@ fn mb_decode_cabac(
                 for c in 0..2usize {
                     for b in 0..4usize {
                         let blk = b;
-                        let cbf_ctx =
-                            nc_cbf_ctx(&pic.mbs, &nz_acc, map, blk, Plane::chroma(c), m.mb_type.is_intra());
+                        let cbf_ctx = nc_cbf_ctx(
+                            &pic.mbs,
+                            &nz_acc,
+                            map,
+                            blk,
+                            Plane::chroma(c),
+                            m.mb_type.is_intra(),
+                        );
                         let r = cabac::decode_residual(
                             cab,
                             ResCat::ChromaAc,
@@ -3361,7 +3811,9 @@ fn mb_decode_cabac(
             if t8x8 {
                 for (g, raw_resid) in luma_res8.iter().enumerate() {
                     let nb = gather_luma8x8(&pic.buf, &pic.mbs, map, g, cx.pps);
-                    let mode = m.i4x4_modes[(g / 2) * 4 * 4 + (g % 2) * 2];
+                    // Top-left 4x4 cell of this 8x8 group on the raster
+                    // mode grid: y*4 + x with (x, y) = (2*(g%2), 2*(g/2)).
+                    let mode = m.i4x4_modes[8 * (g / 2) + 2 * (g % 2)];
                     let mut pred = [0u8; 64];
                     intra::pred8x8(mode, &nb, &mut pred);
                     let mut resid = *raw_resid;
@@ -3385,6 +3837,19 @@ fn mb_decode_cabac(
                     let nb = gather4x4(&pic.buf, &pic.mbs, map, bx, by, blk, cx.pps);
                     let mut pred = [0u8; 16];
                     intra::pred4x4(m.i4x4_modes[r], &nb, &mut pred)?;
+                    dbgln!(
+                        "  recon2 mb{} blk{} ({},{}) mode {} t{:?} tl{:?} l{:?} pred {:?} resid {:?}",
+                        map.idx,
+                        blk,
+                        bx,
+                        by,
+                        m.i4x4_modes[r],
+                        &nb.top[..4],
+                        nb.top_left,
+                        &nb.left[..4],
+                        &pred,
+                        raw_resid
+                    );
                     let mut resid = *raw_resid;
                     if coded {
                         transform::dequant_4x4(&mut resid, m.qp_y);
@@ -3422,8 +3887,8 @@ fn mb_decode_cabac(
                 transform::inverse_4x4(&mut resid)?;
                 for yy in 0..4 {
                     for xx in 0..4 {
-                        let v = i32::from(out[(by * 4 + yy) * 16 + bx * 4 + xx])
-                            + resid[yy * 4 + xx];
+                        let v =
+                            i32::from(out[(by * 4 + yy) * 16 + bx * 4 + xx]) + resid[yy * 4 + xx];
                         pic.buf.y[(py0 + by * 4 + yy) * pic.buf.w + px0 + bx * 4 + xx] =
                             v.clamp(0, 255) as u8;
                     }
@@ -3446,7 +3911,7 @@ fn mb_decode_cabac(
                 reconstruct_part(pic, cx, dpb, map, &mut m, *p)?;
             }
             // Luma residual.
-            if t8x8 {
+            if m.transform8x8 {
                 for (g, raw_resid) in luma_res8.iter().enumerate() {
                     if raw_resid.iter().all(|&v| v == 0) {
                         continue;
@@ -3463,10 +3928,37 @@ fn mb_decode_cabac(
                     if raw_resid.iter().all(|&v| v == 0) {
                         continue;
                     }
+                    if std::env::var("SKIPSUB2").is_ok()
+                        && map.idx == 8
+                        && matches!(blk, 8 | 9 | 12 | 13)
+                    {
+                        continue;
+                    }
+                    if map.idx == 8 && matches!(blk, 8 | 9 | 12 | 13) {
+                        std::eprintln!("MB8COEF blk {} raw {:?}", blk, raw_resid);
+                    }
+                    if matches!(map.idx, 8 | 11 | 13 | 15) && raw_resid.iter().any(|&v| v != 0) {
+                        std::eprintln!(
+                            "FAILEDMB mb{} blk {} qp {} raw {:?}",
+                            map.idx,
+                            blk,
+                            m.qp_y,
+                            raw_resid
+                        );
+                    }
                     let (bx, by) = block_xy(blk);
                     let mut resid = *raw_resid;
                     transform::dequant_4x4(&mut resid, m.qp_y);
                     transform::inverse_4x4(&mut resid)?;
+                    if map.idx == 13 || map.idx == 2 {
+                        std::eprintln!(
+                            "RESINV mb{} blk {} qp {} inv {:?}",
+                            map.idx,
+                            blk,
+                            m.qp_y,
+                            &resid[..]
+                        );
+                    }
                     let o = (py0 + by * 4) * pic.buf.w + px0 + bx * 4;
                     transform::add_residual_4x4(&mut pic.buf.y[o..], pic.buf.w, &resid);
                 }
@@ -3566,15 +4058,26 @@ fn cabac_ref_ctx(
     // Left neighbour of the partition's left edge.
     let (a_ref, a_direct) = if x4 > 0 {
         let b4 = block_index(x4 - 1, y4);
-        let r = if l == 0 { m.ref_idx[b4] } else { m.ref_idx_l1[b4] };
+        let r = if l == 0 {
+            m.ref_idx[b4]
+        } else {
+            m.ref_idx_l1[b4]
+        };
         let g = (x4 - 1) / 2 + (y4 / 2) * 2;
         (r, m.direct_mask & (1 << g) != 0)
     } else if let Some(n) = map.mb_a().and_then(|i| mbs.get(i)) {
         if n.slice_id == map.sid {
             let b4 = block_index(3, y4);
-            let r = if l == 0 { n.ref_idx[b4] } else { n.ref_idx_l1[b4] };
+            let r = if l == 0 {
+                n.ref_idx[b4]
+            } else {
+                n.ref_idx_l1[b4]
+            };
             let g = 1 + (y4 / 2) * 2;
-            (r, n.direct_mask & (1 << g) != 0 || n.mb_type == MbType::BSkip)
+            (
+                r,
+                n.direct_mask & (1 << g) != 0 || n.mb_type == MbType::BSkip,
+            )
         } else {
             (0xff, false)
         }
@@ -3584,15 +4087,26 @@ fn cabac_ref_ctx(
     // Top neighbour of the partition's top edge.
     let (b_ref, b_direct) = if y4 > 0 {
         let b4 = block_index(x4, y4 - 1);
-        let r = if l == 0 { m.ref_idx[b4] } else { m.ref_idx_l1[b4] };
+        let r = if l == 0 {
+            m.ref_idx[b4]
+        } else {
+            m.ref_idx_l1[b4]
+        };
         let g = x4 / 2 + ((y4 - 1) / 2) * 2;
         (r, m.direct_mask & (1 << g) != 0)
     } else if let Some(n) = map.mb_b().and_then(|i| mbs.get(i)) {
         if n.slice_id == map.sid {
             let b4 = block_index(x4, 3);
-            let r = if l == 0 { n.ref_idx[b4] } else { n.ref_idx_l1[b4] };
+            let r = if l == 0 {
+                n.ref_idx[b4]
+            } else {
+                n.ref_idx_l1[b4]
+            };
             let g = x4 / 2 + 2;
-            (r, n.direct_mask & (1 << g) != 0 || n.mb_type == MbType::BSkip)
+            (
+                r,
+                n.direct_mask & (1 << g) != 0 || n.mb_type == MbType::BSkip,
+            )
         } else {
             (0xff, false)
         }
@@ -3605,7 +4119,18 @@ fn cabac_ref_ctx(
     if b_ref != 0xff && b_ref > 0 && !b_direct {
         ctx += 2;
     }
-    dbgln!("    refctx mb{} part({},{}) l{} a_ref={} a_dir={} b_ref={} b_dir={} -> {}", map.idx, x4, y4, l, a_ref, a_direct, b_ref, b_direct, ctx);
+    dbgln!(
+        "    refctx mb{} part({},{}) l{} a_ref={} a_dir={} b_ref={} b_dir={} -> {}",
+        map.idx,
+        x4,
+        y4,
+        l,
+        a_ref,
+        a_direct,
+        b_ref,
+        b_direct,
+        ctx
+    );
     ctx
 }
 
@@ -3643,9 +4168,17 @@ fn read_cabac_refs(
                 continue;
             }
             let ctx_i = cabac_ref_ctx(&pic.mbs, m, map, sx, sy, l);
-            let count = if l == 0 { cx.h.num_ref_idx_l0_active } else { cx.h.num_ref_idx_l1_active };
+            let _count = if l == 0 {
+                cx.h.num_ref_idx_l0_active
+            } else {
+                cx.h.num_ref_idx_l1_active
+            };
             let r = cab.ref_idx(ctx_i)? as u8;
-            let list_len = if l == 0 { cx.ref_order.len() } else { cx.ref_order1.len() };
+            let list_len = if l == 0 {
+                cx.ref_order.len()
+            } else {
+                cx.ref_order1.len()
+            };
             if r as usize >= list_len {
                 return Err(Error::BadValue("ref_idx out of list"));
             }
@@ -3714,7 +4247,18 @@ fn cabac_read_mvd_one(
         let bits = cab.mvd(ctxbase, amvd)?;
         mvd[c] = bits.value as i16;
     }
-    dbgln!("  mvd mb{} part({},{} {}x{} l{} mvp={:?} mvd={:?} pos={}", map.idx, p.x4, p.y4, p.w4, p.h4, l, mvp, mvd, cab.pos());
+    dbgln!(
+        "  mvd mb{} part({},{} {}x{} l{} mvp={:?} mvd={:?} pos={}",
+        map.idx,
+        p.x4,
+        p.y4,
+        p.w4,
+        p.h4,
+        l,
+        mvp,
+        mvd,
+        cab.pos()
+    );
     // Cache the decoded magnitude for later neighbours (reference
     // `mvd_cache` = `*mvda` from `decode_cabac_mb_mvd`: |mvd| clipped
     // at 70 — NOT the predictor. `amvd_ctx` sums these directly).
@@ -3735,6 +4279,7 @@ fn cabac_read_mvd_one(
             if l == 0 {
                 m.mvd_l0[b] = cell;
                 m.mv[b] = mv_final;
+                m.mv_valid[b] = true;
                 // ref must be committed even when the stream omits it
                 // (num_ref_idx_active == 1): neighbours' MVP reads the
                 // reference index, and 0xff means "unavailable".
@@ -3775,11 +4320,19 @@ fn amvd_ctx(
     // skipped neighbours store zero mvd.
     let a = if x4 > 0 {
         let b = block_index(x4 - 1, y4);
-        if l == 0 { m.mvd_l0[b][c] } else { m.mvd_l1[b][c] }
+        if l == 0 {
+            m.mvd_l0[b][c]
+        } else {
+            m.mvd_l1[b][c]
+        }
     } else if let Some(n) = map.mb_a().and_then(|i| mbs.get(i)) {
         if n.slice_id == map.sid {
             let b = block_index(3, y4);
-            if l == 0 { n.mvd_l0[b][c] } else { n.mvd_l1[b][c] }
+            if l == 0 {
+                n.mvd_l0[b][c]
+            } else {
+                n.mvd_l1[b][c]
+            }
         } else {
             0
         }
@@ -3788,11 +4341,19 @@ fn amvd_ctx(
     };
     let b_ = if y4 > 0 {
         let b = block_index(x4, y4 - 1);
-        if l == 0 { m.mvd_l0[b][c] } else { m.mvd_l1[b][c] }
+        if l == 0 {
+            m.mvd_l0[b][c]
+        } else {
+            m.mvd_l1[b][c]
+        }
     } else if let Some(n) = map.mb_b().and_then(|i| mbs.get(i)) {
         if n.slice_id == map.sid {
             let b = block_index(x4, 3);
-            if l == 0 { n.mvd_l0[b][c] } else { n.mvd_l1[b][c] }
+            if l == 0 {
+                n.mvd_l0[b][c]
+            } else {
+                n.mvd_l1[b][c]
+            }
         } else {
             0
         }
@@ -3823,8 +4384,17 @@ fn cabac_read_refs_mvds(
             if p.dirs & 1 != 0 {
                 let ctx_i = cabac_ref_ctx(&pic.mbs, m, map, p.x4, p.y4, 0);
                 p.ref0 = cab.ref_idx(ctx_i)? as u8;
+                dbgln!(
+                    "refidx mb{} l0 ctx={} r={} active={} pos={} OOR={}",
+                    map.idx,
+                    ctx_i,
+                    p.ref0,
+                    cx.h.num_ref_idx_l0_active,
+                    cab.pos(),
+                    p.ref0 as usize >= cx.h.num_ref_idx_l0_active as usize
+                );
                 if p.ref0 as usize >= cx.h.num_ref_idx_l0_active as usize {
-                        return Err(Error::BadValue("ref_idx_l0 out of list"));
+                    return Err(Error::BadValue("ref_idx_l0 out of list"));
                 }
                 for yy in p.y4..p.y4 + p.h4 {
                     for xx in p.x4..p.x4 + p.w4 {
@@ -3840,8 +4410,15 @@ fn cabac_read_refs_mvds(
                 let ctx_i = cabac_ref_ctx(&pic.mbs, m, map, p.x4, p.y4, 1);
                 p.ref1 = cab.ref_idx(ctx_i)? as u8;
                 if p.ref1 as usize >= cx.h.num_ref_idx_l1_active as usize {
-                        return Err(Error::BadValue("ref_idx_l1 out of list"));
+                    return Err(Error::BadValue("ref_idx_l1 out of list"));
                 }
+                dbgln!(
+                    "refidx mb{} l1 ctx={} r={} active={}",
+                    map.idx,
+                    ctx_i,
+                    p.ref1,
+                    cx.h.num_ref_idx_l1_active
+                );
                 for yy in p.y4..p.y4 + p.h4 {
                     for xx in p.x4..p.x4 + p.w4 {
                         m.ref_idx_l1[block_index(xx, yy)] = p.ref1;
@@ -3865,16 +4442,33 @@ fn cabac_read_refs_mvds(
 
 /// `coded_block_flag` context for a *coefficient block* (non-DC cats):
 /// neighbour TotalCoeff via the same nC machinery CAVLC uses.
-fn nc_cbf_ctx(mbs: &[MbState], nz_acc: &[u8; 24], map: MbMap, blk: usize, plane: Plane, cur_intra: bool) -> usize {
+fn nc_cbf_ctx(
+    mbs: &[MbState],
+    nz_acc: &[u8; 24],
+    map: MbMap,
+    blk: usize,
+    plane: Plane,
+    cur_intra: bool,
+) -> usize {
     // ctxIdxInc = (nza > 0) + 2*(nzb > 0) where nz are the neighbour
     // block TotalCoeffs (spec 9.3.3.1.1.9). Chroma grids are 2x2.
     let (bx, by) = plane.xy(blk);
     let left_nc = |mbs: &[MbState]| -> i32 {
         if bx > 0 {
-            i32::from(nz_acc[plane.nz_idx(match plane { Plane::Luma => block_index(bx - 1, by), _ => by * 2 + bx - 1 })])
+            i32::from(
+                nz_acc[plane.nz_idx(match plane {
+                    Plane::Luma => block_index(bx - 1, by),
+                    _ => by * 2 + bx - 1,
+                })],
+            )
         } else if let Some(n) = map.mb_a().and_then(|i| mbs.get(i)) {
             if n.slice_id == map.sid {
-                i32::from(n.nz[plane.nz_idx(match plane { Plane::Luma => block_index(3, by), _ => by * 2 + 1 })])
+                i32::from(
+                    n.nz[plane.nz_idx(match plane {
+                        Plane::Luma => block_index(3, by),
+                        _ => by * 2 + 1,
+                    })],
+                )
             } else {
                 -1
             }
@@ -3884,10 +4478,20 @@ fn nc_cbf_ctx(mbs: &[MbState], nz_acc: &[u8; 24], map: MbMap, blk: usize, plane:
     };
     let top_nc = |mbs: &[MbState]| -> i32 {
         if by > 0 {
-            i32::from(nz_acc[plane.nz_idx(match plane { Plane::Luma => block_index(bx, by - 1), _ => (by - 1) * 2 + bx })])
+            i32::from(
+                nz_acc[plane.nz_idx(match plane {
+                    Plane::Luma => block_index(bx, by - 1),
+                    _ => (by - 1) * 2 + bx,
+                })],
+            )
         } else if let Some(n) = map.mb_b().and_then(|i| mbs.get(i)) {
             if n.slice_id == map.sid {
-                i32::from(n.nz[plane.nz_idx(match plane { Plane::Luma => block_index(bx, 3), _ => 2 + bx })])
+                i32::from(
+                    n.nz[plane.nz_idx(match plane {
+                        Plane::Luma => block_index(bx, 3),
+                        _ => 2 + bx,
+                    })],
+                )
             } else {
                 -1
             }
@@ -3898,8 +4502,14 @@ fn nc_cbf_ctx(mbs: &[MbState], nz_acc: &[u8; 24], map: MbMap, blk: usize, plane:
     // Unavailable neighbours read as 64 coefficients for intra MBs
     // (reference `nnz_excluded`), 0 for inter — NOT always 0.
     let edge = if cur_intra { 64 } else { 0 };
-    let a = { let v = left_nc(mbs); if v < 0 { edge } else { v } };
-    let b = { let v = top_nc(mbs); if v < 0 { edge } else { v } };
+    let a = {
+        let v = left_nc(mbs);
+        if v < 0 { edge } else { v }
+    };
+    let b = {
+        let v = top_nc(mbs);
+        if v < 0 { edge } else { v }
+    };
     usize::from(a > 0) + 2 * usize::from(b > 0)
 }
 
@@ -3958,23 +4568,22 @@ fn reconstruct_part(
 ) -> Result<()> {
     let px0 = map.x * 16;
     let py0 = map.y * 16;
+    // Use the parse-time MV, not a re-derivation: `cabac_read_mvd_one`
+    // committed mvp+mvd into the motion state in decode order, which is
+    // exactly what the reference decoder's mv_cache carries into
+    // reconstruction. Recomputing here would see LATER same-MB
+    // partitions already committed (different candidate availability)
+    // and overwrite the correct MV.
+    let b0 = block_index(p.x4, p.y4);
     let mut mv0 = [0i16; 2];
     let mut mv1 = [0i16; 2];
     let (mut r0, mut r1) = (-1i32, -1i32);
     if p.dirs & 1 != 0 {
-        let mvp = mvp_lx_parts(&pic.mbs, Some(m), map, p.x4, p.y4, p.w4, p.h4, p.ref0, 0);
-        mv0 = [
-            (i32::from(mvp[0]) + i32::from(p.mvd0[0])).clamp(-8192, 8191) as i16,
-            (i32::from(mvp[1]) + i32::from(p.mvd0[1])).clamp(-8192, 8191) as i16,
-        ];
+        mv0 = m.mv[b0];
         r0 = i32::from(p.ref0);
     }
     if p.dirs & 2 != 0 {
-        let mvp = mvp_lx_parts(&pic.mbs, Some(m), map, p.x4, p.y4, p.w4, p.h4, p.ref1, 1);
-        mv1 = [
-            (i32::from(mvp[0]) + i32::from(p.mvd1[0])).clamp(-8192, 8191) as i16,
-            (i32::from(mvp[1]) + i32::from(p.mvd1[1])).clamp(-8192, 8191) as i16,
-        ];
+        mv1 = m.mv_l1[b0];
         r1 = i32::from(p.ref1);
     }
     // Store per-4x4 motion state for neighbours + coloc + deblock.
@@ -3984,9 +4593,11 @@ fn reconstruct_part(
             if p.dirs & 1 != 0 {
                 m.mv[b] = mv0;
                 m.ref_idx[b] = p.ref0;
+                m.mv_valid[b] = true;
             } else {
                 m.ref_idx[b] = 0xff;
                 m.mv[b] = [0, 0];
+                m.mv_valid[b] = false;
             }
             if p.dirs & 2 != 0 {
                 m.mv_l1[b] = mv1;
@@ -4028,6 +4639,7 @@ fn mvp_lx_parts(
     ref_idx: u8,
     l: usize,
 ) -> [i16; 2] {
+    extern crate std;
     let a = mv_at_l(mbs, cur, map, x4 as i32 - 1, y4 as i32, l);
     let b = mv_at_l(mbs, cur, map, x4 as i32, y4 as i32 - 1, l);
     let mut c = mv_at_l(mbs, cur, map, x4 as i32 + w4 as i32, y4 as i32 - 1, l);
@@ -4038,8 +4650,47 @@ fn mvp_lx_parts(
     let (mv_b, ref_b) = b.unwrap_or(([0, 0], -1));
     let (mv_c, ref_c) = c.unwrap_or(([0, 0], -1));
     let ri = i32::from(ref_idx);
-    // Directional cases (spec 8-203..8-206 + sub-mb analogues).
-    if w4 * 4 == 16 && h4 * 4 == 8 {
+    if map.idx == 2 || map.idx == 8 || map.idx == 13 {
+        std::eprintln!(
+            "MVP mb{} x4={} y4={} w4={} h4={} ri={} A={:?} B={:?} C={:?}",
+            map.idx,
+            x4,
+            y4,
+            w4,
+            h4,
+            ref_idx,
+            a,
+            b,
+            c
+        );
+    }
+    if w4 == 1 && h4 == 1 {
+        if let Ok(s) = std::env::var("P4MV") {
+            if let Some((xs, ys)) = s.split_once(',') {
+                if map.idx == 8 {
+                    let xv: i16 = xs.trim().parse().unwrap_or(0);
+                    let yv: i16 = ys.trim().parse().unwrap_or(0);
+                    return [xv, yv];
+                }
+            }
+        }
+        if std::env::var("MVP4").is_ok() {
+            return match std::env::var("MVP4").as_deref() {
+                Ok("a") => mv_a,
+                Ok("b") => mv_b,
+                Ok("c") => mv_c,
+                _ => [0, 0],
+            };
+        }
+    }
+    // Directional single-candidate rules are MB-partition-only (spec
+    // 8.4.1.1 "If MbPartWidth is 16 and MbPartHeight is 8..." / the
+    // 8x16 analogue; ffmpeg keeps them in pred_16x8/pred_8x16_motion,
+    // called only from MB-partition decode). Sub-mb partitions
+    // (8x8/8x4/4x8/4x4) always take the median path — the previous
+    // 8x4/4x8 cases generalised the rules down to sub-mbs and broke
+    // every mixed-sub P8x8 MB in t2 (t2_8x8_part frame 1+).
+    if w4 == 4 && h4 == 2 {
         if y4 == 0 && ref_b == ri {
             return mv_b;
         }
@@ -4047,27 +4698,11 @@ fn mvp_lx_parts(
             return mv_a;
         }
     }
-    if w4 * 4 == 8 && h4 * 4 == 16 {
+    if w4 == 2 && h4 == 4 {
         if x4 == 0 && ref_a == ri {
             return mv_a;
         }
         if x4 == 2 && ref_c == ri {
-            return mv_c;
-        }
-    }
-    if w4 * 4 == 8 && h4 * 4 == 4 {
-        if y4 % 2 == 0 && ref_b == ri {
-            return mv_b;
-        }
-        if y4 % 2 == 1 && ref_a == ri {
-            return mv_a;
-        }
-    }
-    if w4 * 4 == 4 && h4 * 4 == 8 {
-        if x4 % 2 == 0 && ref_a == ri {
-            return mv_a;
-        }
-        if x4 % 2 == 1 && ref_c == ri {
             return mv_c;
         }
     }
@@ -4098,13 +4733,7 @@ fn mvp_lx_parts(
 /// 8x8 quadrants in raster order (0..3); same-MB groups decoded
 /// earlier are valid predictors.
 #[allow(clippy::too_many_arguments)]
-fn gather_luma8x8(
-    buf: &FrameBuf,
-    mbs: &[MbState],
-    map: MbMap,
-    g: usize,
-    pps: &Pps,
-) -> NbSamples {
+fn gather_luma8x8(buf: &FrameBuf, mbs: &[MbState], map: MbMap, g: usize, pps: &Pps) -> NbSamples {
     let gx = (g % 2) * 2;
     let gy = (g / 2) * 2;
     let px = map.x * 16 + gx * 4;
@@ -4213,7 +4842,6 @@ fn gather_luma8x8(
     };
     nb
 }
-
 
 /// Whether `transform_size_8x8_flag` is syntactically present for the
 /// current sequence (spec 7.3.5 mb_pred + ffmpeg `dct8x8_allowed` =

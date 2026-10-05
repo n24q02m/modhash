@@ -116,24 +116,78 @@ impl MbType {
             // Two-partition codes: geometry first (16x8 = 4x2 or
             // 8x16 = 2x4 blocks), then the direction pair in Table
             // 7-15's listed order.
-            4 => Ok(MbType::BPart { p0: (4, 2, 1), p1: (4, 2, 1) }),
-            5 => Ok(MbType::BPart { p0: (2, 4, 1), p1: (2, 4, 1) }),
-            6 => Ok(MbType::BPart { p0: (4, 2, 2), p1: (4, 2, 2) }),
-            7 => Ok(MbType::BPart { p0: (2, 4, 2), p1: (2, 4, 2) }),
-            8 => Ok(MbType::BPart { p0: (4, 2, 1), p1: (4, 2, 2) }),
-            9 => Ok(MbType::BPart { p0: (2, 4, 1), p1: (2, 4, 2) }),
-            10 => Ok(MbType::BPart { p0: (4, 2, 2), p1: (4, 2, 1) }),
-            11 => Ok(MbType::BPart { p0: (2, 4, 2), p1: (2, 4, 1) }),
-            12 => Ok(MbType::BPart { p0: (4, 2, 1), p1: (4, 2, 3) }),
-            13 => Ok(MbType::BPart { p0: (2, 4, 1), p1: (2, 4, 3) }),
-            14 => Ok(MbType::BPart { p0: (4, 2, 2), p1: (4, 2, 3) }),
-            15 => Ok(MbType::BPart { p0: (2, 4, 2), p1: (2, 4, 3) }),
-            16 => Ok(MbType::BPart { p0: (4, 2, 3), p1: (4, 2, 1) }),
-            17 => Ok(MbType::BPart { p0: (2, 4, 3), p1: (2, 4, 1) }),
-            18 => Ok(MbType::BPart { p0: (4, 2, 3), p1: (4, 2, 2) }),
-            19 => Ok(MbType::BPart { p0: (2, 4, 3), p1: (2, 4, 2) }),
-            20 => Ok(MbType::BPart { p0: (4, 2, 3), p1: (4, 2, 3) }),
-            21 => Ok(MbType::BPart { p0: (2, 4, 3), p1: (2, 4, 3) }),
+            4 => Ok(MbType::BPart {
+                p0: (4, 2, 1),
+                p1: (4, 2, 1),
+            }),
+            5 => Ok(MbType::BPart {
+                p0: (2, 4, 1),
+                p1: (2, 4, 1),
+            }),
+            6 => Ok(MbType::BPart {
+                p0: (4, 2, 2),
+                p1: (4, 2, 2),
+            }),
+            7 => Ok(MbType::BPart {
+                p0: (2, 4, 2),
+                p1: (2, 4, 2),
+            }),
+            8 => Ok(MbType::BPart {
+                p0: (4, 2, 1),
+                p1: (4, 2, 2),
+            }),
+            9 => Ok(MbType::BPart {
+                p0: (2, 4, 1),
+                p1: (2, 4, 2),
+            }),
+            10 => Ok(MbType::BPart {
+                p0: (4, 2, 2),
+                p1: (4, 2, 1),
+            }),
+            11 => Ok(MbType::BPart {
+                p0: (2, 4, 2),
+                p1: (2, 4, 1),
+            }),
+            12 => Ok(MbType::BPart {
+                p0: (4, 2, 1),
+                p1: (4, 2, 3),
+            }),
+            13 => Ok(MbType::BPart {
+                p0: (2, 4, 1),
+                p1: (2, 4, 3),
+            }),
+            14 => Ok(MbType::BPart {
+                p0: (4, 2, 2),
+                p1: (4, 2, 3),
+            }),
+            15 => Ok(MbType::BPart {
+                p0: (2, 4, 2),
+                p1: (2, 4, 3),
+            }),
+            16 => Ok(MbType::BPart {
+                p0: (4, 2, 3),
+                p1: (4, 2, 1),
+            }),
+            17 => Ok(MbType::BPart {
+                p0: (2, 4, 3),
+                p1: (2, 4, 1),
+            }),
+            18 => Ok(MbType::BPart {
+                p0: (4, 2, 3),
+                p1: (4, 2, 2),
+            }),
+            19 => Ok(MbType::BPart {
+                p0: (2, 4, 3),
+                p1: (2, 4, 2),
+            }),
+            20 => Ok(MbType::BPart {
+                p0: (4, 2, 3),
+                p1: (4, 2, 3),
+            }),
+            21 => Ok(MbType::BPart {
+                p0: (2, 4, 3),
+                p1: (2, 4, 3),
+            }),
             22 => Ok(MbType::B8x8),
             23..=48 => MbType::i_slice(code - 23),
             _ => Err(Error::BadValue("B-slice mb_type over 48")),
@@ -186,18 +240,78 @@ impl SubMbType {
     pub(crate) fn from_code_b(code: u32) -> Result<SubMbType> {
         match code {
             0 => Ok(SubMbType::BDirect),
-            1 => Ok(SubMbType::BInter { w4: 2, h4: 2, nparts: 1, dirs: 1 }),
-            2 => Ok(SubMbType::BInter { w4: 2, h4: 2, nparts: 1, dirs: 2 }),
-            3 => Ok(SubMbType::BInter { w4: 2, h4: 2, nparts: 1, dirs: 3 }),
-            4 => Ok(SubMbType::BInter { w4: 2, h4: 1, nparts: 2, dirs: 1 }),
-            5 => Ok(SubMbType::BInter { w4: 1, h4: 2, nparts: 2, dirs: 1 }),
-            6 => Ok(SubMbType::BInter { w4: 2, h4: 1, nparts: 2, dirs: 2 }),
-            7 => Ok(SubMbType::BInter { w4: 1, h4: 2, nparts: 2, dirs: 2 }),
-            8 => Ok(SubMbType::BInter { w4: 2, h4: 1, nparts: 2, dirs: 3 }),
-            9 => Ok(SubMbType::BInter { w4: 1, h4: 2, nparts: 2, dirs: 3 }),
-            10 => Ok(SubMbType::BInter { w4: 1, h4: 1, nparts: 4, dirs: 1 }),
-            11 => Ok(SubMbType::BInter { w4: 1, h4: 1, nparts: 4, dirs: 2 }),
-            12 => Ok(SubMbType::BInter { w4: 1, h4: 1, nparts: 4, dirs: 3 }),
+            1 => Ok(SubMbType::BInter {
+                w4: 2,
+                h4: 2,
+                nparts: 1,
+                dirs: 1,
+            }),
+            2 => Ok(SubMbType::BInter {
+                w4: 2,
+                h4: 2,
+                nparts: 1,
+                dirs: 2,
+            }),
+            3 => Ok(SubMbType::BInter {
+                w4: 2,
+                h4: 2,
+                nparts: 1,
+                dirs: 3,
+            }),
+            4 => Ok(SubMbType::BInter {
+                w4: 2,
+                h4: 1,
+                nparts: 2,
+                dirs: 1,
+            }),
+            5 => Ok(SubMbType::BInter {
+                w4: 1,
+                h4: 2,
+                nparts: 2,
+                dirs: 1,
+            }),
+            6 => Ok(SubMbType::BInter {
+                w4: 2,
+                h4: 1,
+                nparts: 2,
+                dirs: 2,
+            }),
+            7 => Ok(SubMbType::BInter {
+                w4: 1,
+                h4: 2,
+                nparts: 2,
+                dirs: 2,
+            }),
+            8 => Ok(SubMbType::BInter {
+                w4: 2,
+                h4: 1,
+                nparts: 2,
+                dirs: 3,
+            }),
+            9 => Ok(SubMbType::BInter {
+                w4: 1,
+                h4: 2,
+                nparts: 2,
+                dirs: 3,
+            }),
+            10 => Ok(SubMbType::BInter {
+                w4: 1,
+                h4: 1,
+                nparts: 4,
+                dirs: 1,
+            }),
+            11 => Ok(SubMbType::BInter {
+                w4: 1,
+                h4: 1,
+                nparts: 4,
+                dirs: 2,
+            }),
+            12 => Ok(SubMbType::BInter {
+                w4: 1,
+                h4: 1,
+                nparts: 4,
+                dirs: 3,
+            }),
             _ => Err(Error::BadValue("B sub_mb_type over 12")),
         }
     }
@@ -253,6 +367,11 @@ pub(crate) struct MbState {
     pub mv: [[i16; 2]; 16],
     /// `ref_idx_l0` per 4x4 block (0xff = not used on this list).
     pub ref_idx: [u8; 16],
+    /// True once this block's L0 MV has been decoded/committed. `ref_idx`
+    /// may be committed early (the whole sub-mb's refs decode before any
+    /// mvd), so availability for MV prediction needs a separate gate —
+    /// an early ref with a stale zero MV must read as *unavailable*.
+    pub mv_valid: [bool; 16],
     /// Luma motion vectors per 4x4 block for list L1 (B slices).
     pub mv_l1: [[i16; 2]; 16],
     /// `ref_idx_l1` per 4x4 block (0xff = unused).
@@ -301,6 +420,7 @@ impl MbState {
             nz: [0; 24],
             mv: [[0; 2]; 16],
             ref_idx: [0xff; 16],
+            mv_valid: [false; 16],
             mv_l1: [[0; 2]; 16],
             ref_idx_l1: [0xff; 16],
             i4x4_modes: [0xff; 16],
