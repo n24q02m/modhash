@@ -282,20 +282,21 @@ fn idct8_pass(b: &mut [i32], idx: [usize; 8]) {
     b[idx[4]] = b6.wrapping_sub(b1);
 }
 
-/// The H.264 8x8 integer inverse transform (spec 8.5.12.3): a row
-/// pass, then a column pass that both folds in the +32 rounding and
-/// the `>> 6` normalisation.
+/// The H.264 8x8 integer inverse transform (spec 8.5.12.3): row pass,
+/// then column pass, matching the reference decoder's `idct8_add`
+/// exactly — the passes are NOT commutative because each 1-D pass
+/// contains rounding shifts (`>>1`/`>>2`), and the reference folds the
+/// rounding constant into the DC before the passes.
 pub(crate) fn inverse_8x8(b: &mut Block8) {
-    // Rounding constant for the final >>6: adding 32 to element (0,0)
-    // propagates it through the butterfly exactly where the reference
-    // decoder expects it (spec 8.5.12.3's "+ r" terms).
+    // The reference decoder adds the rounding constant into the DC
+    // coefficient BEFORE the passes (h264idct_template.c idct8_add:
+    // `block[0] += 32;`) and stores with a plain arithmetic `>> 6`.
+    // These are NOT interchangeable with a store-time `+32` because the
+    // `>>1`/`>>2` shifts inside the butterflies round differently.
     b[0] = b[0].wrapping_add(32);
-    for i in 0..8 {
-        let idx = [i, 8 + i, 16 + i, 24 + i, 32 + i, 40 + i, 48 + i, 56 + i];
-        // Column of the raster block = the `i + n*8` stride positions
-        // (first pass in the reference code operates on strides).
-        idct8_pass(b, idx);
-    }
+    // Rows first, columns second: combined with the ZIGZAG_8X8 storage
+    // (the transpose of the reference decoder's block layout) this
+    // reproduces `idct8_add` bit-exactly (see tables.rs note).
     for i in 0..8 {
         let idx = [
             i * 8,
@@ -309,9 +310,14 @@ pub(crate) fn inverse_8x8(b: &mut Block8) {
         ];
         idct8_pass(b, idx);
     }
-    // Final >>6 normalisation (the reference applies it while storing).
+    for i in 0..8 {
+        let idx = [i, 8 + i, 16 + i, 24 + i, 32 + i, 40 + i, 48 + i, 56 + i];
+        idct8_pass(b, idx);
+    }
+    // Final normalisation: plain arithmetic shift (the rounding
+    // constant was already folded into the DC above).
     for v in b.iter_mut() {
-        *v = *v >> 6;
+        *v >>= 6;
     }
 }
 

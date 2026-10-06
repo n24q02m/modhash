@@ -768,6 +768,36 @@ fn nb_at<'a>(mbs: &'a [MbState], i: Option<usize>, sid: u32) -> Option<&'a MbSta
     i.and_then(|j| mbs.get(j)).filter(|m| m.slice_id == sid)
 }
 
+/// TEMPORARY DEBUG (h264 bisect): pre-deblock per-MB luma recon dump.
+/// Expands at call sites that have `pic: &Pic`, `wm` (MB row width) and
+/// the `alloc`/`std` crates in scope.
+macro_rules! mbpx {
+    ($idx:expr, $pic:expr, $wm:expr) => {{
+        extern crate std;
+        if std::env::var_os("H264MBPX").is_some() {
+            let idx: usize = $idx;
+            let pic: &Pic = $pic;
+            let wm: usize = $wm;
+            let x = idx % wm * 16;
+            let y = idx / wm * 16;
+            let mut line = alloc::format!(
+                "OBSMBPX poc={} fn={} x={} y={}",
+                pic.poc,
+                pic.frame_num,
+                x,
+                y
+            );
+            for yy in 0..16usize {
+                let row = (y + yy) * pic.buf.w + x;
+                for xx in 0..16usize {
+                    line.push_str(&alloc::format!(" {}", pic.buf.y[row + xx]));
+                }
+            }
+            std::eprintln!("{}", line);
+        }
+    }};
+}
+
 /// The macroblock-layer loop of `slice_data` (spec 7.3.4).
 fn slice_data(
     pic: &mut Pic,
@@ -798,6 +828,7 @@ fn slice_data(
                 }
                 p_skip(pic, cx, dpb, mb_idx, wm)?;
                 mb_idx += 1;
+                mbpx!(mb_idx - 1, pic, wm);
             }
             if mb_idx >= total || br.no_more_rbsp_data() {
                 break;
@@ -811,6 +842,7 @@ fn slice_data(
                 }
                 b_skip(pic, cx, dpb, mb_idx, wm)?;
                 mb_idx += 1;
+                mbpx!(mb_idx - 1, pic, wm);
             }
             if mb_idx >= total || br.no_more_rbsp_data() {
                 break;
@@ -818,6 +850,7 @@ fn slice_data(
         }
         mb_decode(pic, br, cx, dpb, mb_idx, wm)?;
         mb_idx += 1;
+        mbpx!(mb_idx - 1, pic, wm);
         if mb_idx >= total || br.no_more_rbsp_data() {
             break;
         }
@@ -860,6 +893,12 @@ fn p_skip(pic: &mut Pic, cx: &mut SliceCx<'_>, dpb: &Dpb, idx: usize, wm: usize)
         mvp_l0_parts(&pic.mbs, None, map, 0, 0, 4, 4, 0)
     };
     dbgln!("  skip mb{idx} mvp {mvp:?}");
+    {
+        extern crate std;
+        if std::env::var_os("H264MVDUMP").is_some() {
+            std::eprintln!("OBSMV mb={idx} skip=1 mv=({}, {})", mvp[0], mvp[1]);
+        }
+    }
     {
         let m = &mut pic.mbs[idx];
         m.mb_type = MbType::PSkip;
@@ -925,6 +964,20 @@ fn b_skip(pic: &mut Pic, cx: &mut SliceCx<'_>, dpb: &Dpb, idx: usize, wm: usize)
         cx.h.direct_spatial
     );
     let r = direct_motion(pic, cx, dpb, idx, wm, &mut m, 0b1111);
+    {
+        extern crate std;
+        if std::env::var_os("H264MVDUMP").is_some() {
+            std::eprintln!(
+                "OBSMV mb={} skip=1 dir={} mv0=({}, {}) mv1=({}, {})",
+                idx,
+                cx.h.direct_spatial,
+                m.mv[0][0],
+                m.mv[0][1],
+                m.mv[8][0],
+                m.mv[8][1]
+            );
+        }
+    }
     pic.mbs[idx] = m;
     r
 }
@@ -1471,6 +1524,25 @@ fn mb_decode(
                     let mode = m.i4x4_modes[8 * (g / 2) + 2 * (g % 2)];
                     let mut pred = [0u8; 64];
                     intra::pred8x8(mode, &nb, &mut pred);
+                    if std::env::var_os("H264P8").is_some() {
+                        let mut line = alloc::format!(
+                            "OBSP8 poc={} fn={} mb={} g{} mode={} l{} t{} tl{} tr{} [",
+                            pic.poc,
+                            pic.frame_num,
+                            idx,
+                            g,
+                            mode,
+                            nb.has_left,
+                            nb.has_top,
+                            nb.top_left.is_some(),
+                            nb.top_right.is_some()
+                        );
+                        for &v in pred.iter() {
+                            line.push_str(&alloc::format!(" {}", v));
+                        }
+                        line.push(']');
+                        std::eprintln!("{}", line);
+                    }
                     let mut resid = *raw_resid;
                     if coded && cbp_luma & (1 << g) != 0 {
                         transform::dequant_8x8(&mut resid, m.qp_y);
@@ -1597,6 +1669,17 @@ fn mb_decode(
                 reconstruct_part(pic, cx, dpb, map, &mut m, *p)?;
             }
             // Add luma residual where cbp says coefficients exist.
+            if std::env::var_os("H264PRE").is_some() {
+                let mut line =
+                    alloc::format!("OBSPRE poc={} fn={} mb={}:", pic.poc, pic.frame_num, idx);
+                for yy in 0..16usize {
+                    let row = (py0 + yy) * pic.buf.w + px0;
+                    for xx in 0..16usize {
+                        line.push_str(&alloc::format!(" {}", pic.buf.y[row + xx]));
+                    }
+                }
+                std::eprintln!("{}", line);
+            }
             if m.transform8x8 {
                 for (g, raw_resid) in luma_res8.iter().enumerate() {
                     if raw_resid.iter().all(|&v| v == 0) {
@@ -1605,6 +1688,28 @@ fn mb_decode(
                     let (bx, by) = ((g % 2) * 8, (g / 2) * 8);
                     let mut resid = *raw_resid;
                     transform::dequant_8x8(&mut resid, m.qp_y);
+                    if std::env::var_os("H264DQ").is_some() {
+                        let mut line = alloc::format!(
+                            "dq8 poc={} fn={} mb={} g{} qp{} nz [",
+                            pic.poc,
+                            pic.frame_num,
+                            idx,
+                            g,
+                            m.qp_y
+                        );
+                        let mut first = true;
+                        for (r, &v) in resid.iter().enumerate() {
+                            if v != 0 {
+                                if !first {
+                                    line.push_str(", ");
+                                }
+                                line.push_str(&alloc::format!("({}, {})", r, v));
+                                first = false;
+                            }
+                        }
+                        line.push(']');
+                        std::eprintln!("{}", line);
+                    }
                     transform::inverse_8x8(&mut resid);
                     let o = (py0 + by) * pic.buf.w + px0 + bx;
                     transform::add_residual_8x8(&mut pic.buf.y[o..], pic.buf.w, &resid);
@@ -1617,6 +1722,28 @@ fn mb_decode(
                     let (bx, by) = block_xy(blk);
                     let mut resid = *raw_resid;
                     transform::dequant_4x4(&mut resid, m.qp_y);
+                    if std::env::var_os("H264DQ").is_some() {
+                        let mut line = alloc::format!(
+                            "dq4 poc={} fn={} mb={} b{} qp{} [",
+                            pic.poc,
+                            pic.frame_num,
+                            idx,
+                            blk,
+                            m.qp_y
+                        );
+                        let mut first = true;
+                        for (r, &v) in resid.iter().enumerate() {
+                            if v != 0 {
+                                if !first {
+                                    line.push_str(", ");
+                                }
+                                line.push_str(&alloc::format!("({}, {})", r, v));
+                                first = false;
+                            }
+                        }
+                        line.push(']');
+                        std::eprintln!("{}", line);
+                    }
                     transform::inverse_4x4(&mut resid)?;
                     let o = (py0 + by * 4) * pic.buf.w + px0 + bx * 4;
                     transform::add_residual_4x4(&mut pic.buf.y[o..], pic.buf.w, &resid);
@@ -3126,10 +3253,19 @@ fn slice_data_cabac(
         cx.pps.pic_init_qp,
         cx.h.slice_qp_delta
     );
+    // Spec 9.3.1.1: context initialisation uses `SliceQPY` of THIS slice
+    // (`pic_init_qp + slice_qp_delta`), not the carried `qp_prev` of the
+    // previous slice's last MB — ffmpeg uses `sl->qscale` for the same.
+    crate::dbgln!(
+        "cabac bytes off={} data={:?}",
+        cabac_off,
+        &rbsp[cabac_off..cabac_off + 6.min(rbsp.len() - cabac_off)],
+    );
+    let slice_qp = (cx.pps.pic_init_qp + cx.h.slice_qp_delta).clamp(0, 51) as u8;
     let mut cab = cabac::Cabac::new(
         &rbsp[cabac_off..],
         cx.h.slice_type,
-        cx.qp_prev.clamp(0, 51) as u8,
+        slice_qp,
         cx.h.cabac_init_idc,
     );
     loop {
@@ -3179,6 +3315,7 @@ fn slice_data_cabac(
             );
         }
         mb_idx += 1;
+        mbpx!(mb_idx - 1, pic, wm);
         if mb_idx >= total {
             break;
         }
@@ -3253,7 +3390,14 @@ fn mb_decode_cabac(
             }
             let code = cab.b_mb_type(cnt)?;
             if std::env::var("MTDBG").is_ok() {
-                std::eprintln!("MT poc={} mb=({},{}) code={} spat={}", cx.cur_poc, map.x, map.y, code, cx.h.direct_spatial);
+                std::eprintln!(
+                    "MT poc={} mb=({},{}) code={} spat={}",
+                    cx.cur_poc,
+                    map.x,
+                    map.y,
+                    code,
+                    cx.h.direct_spatial
+                );
             }
             if code >= 23 {
                 MbType::i_slice(u32::from(code) - 23)?
@@ -3283,7 +3427,7 @@ fn mb_decode_cabac(
     let mut sub_blocks_8x8 = false;
     match mb_type {
         MbType::I4x4 => {
-            // ctxIdx 399 transform_size_8x8_flag (spec Table 9-11
+            // ctxIdx 399 transform_size_8x8_flag (spec Table 9-11;
             // ctxIdxInc = neighbour 8x8 flags; spec 9.3.3.1.1.9).
             if cabac_t8x8_allowed(cx) && cab.transform_8x8(cabac_ctx399(&pic.mbs, &map))? {
                 m.transform8x8 = true;
@@ -3601,7 +3745,7 @@ fn mb_decode_cabac(
     // transform_size_8x8_flag (ffmpeg h264_cabac.c:2347:
     // `dct8x8_allowed && (cbp&15) && !IS_INTRA`; dct8x8_allowed is the
     // PPS flag narrowed by get_dct8x8_allowed for P_8x8/B_8x8).
-    let mut t8x8 = false;
+    let mut t8x8 = mb_type.is_intra() && m.transform8x8;
     if !mb_type.is_intra()
         && cx.pps.transform_8x8_mode
         && cbp_luma > 0
@@ -3710,8 +3854,12 @@ fn mb_decode_cabac(
                 // No cbf bin for luma 8x8 (ffmpeg ff_h264_cabac.c:1859);
                 // the cbp luma bit already gated this group.
                 let r = cabac::decode_residual(cab, ResCat::Luma8x8, 0, &ZIGZAG_8X8)?;
-                for s in 0..64 {
-                    luma_res8[g][ZIGZAG_8X8[s] as usize] = r.levels[s];
+                // ZIGZAG_8X8 yields raster positions (row*8+col), matching
+                // ff's zigzag_scan8x8; dequant_8x8/inverse_8x8_ff/consumer
+                // are all raster — place directly, no transpose.
+                for s in 0..64usize {
+                    let z = ZIGZAG_8X8[s] as usize;
+                    luma_res8[g][z] = r.levels[s];
                 }
                 for s4 in 0..4usize {
                     nz_acc[blk + s4] = r.total_coeff.min(63);
@@ -3733,13 +3881,6 @@ fn mb_decode_cabac(
                         m.mb_type.is_intra(),
                     );
                     let r = cabac::decode_residual(cab, ResCat::Luma4x4, cbf_ctx, &ZIGZAG_4X4)?;
-                    dbgln!(
-                        "  resid mb{} blk{} tc={} pos={}",
-                        map.idx,
-                        blk,
-                        r.total_coeff,
-                        cab.pos()
-                    );
                     for s in 0..16 {
                         luma_res[blk][ZIGZAG_4X4[s] as usize] = r.levels[s];
                     }
@@ -3813,12 +3954,32 @@ fn mb_decode_cabac(
         MbType::I4x4 => {
             if t8x8 {
                 for (g, raw_resid) in luma_res8.iter().enumerate() {
+                    dbgln!("res8 mb{} g{} {:?}", map.idx, g, &raw_resid[..]);
                     let nb = gather_luma8x8(&pic.buf, &pic.mbs, map, g, cx.pps);
                     // Top-left 4x4 cell of this 8x8 group on the raster
                     // mode grid: y*4 + x with (x, y) = (2*(g%2), 2*(g/2)).
                     let mode = m.i4x4_modes[8 * (g / 2) + 2 * (g % 2)];
                     let mut pred = [0u8; 64];
                     intra::pred8x8(mode, &nb, &mut pred);
+                    if std::env::var_os("H264P8").is_some() {
+                        let mut line = alloc::format!(
+                            "OBSP8 poc={} fn={} mb={} g{} mode={} l{} t{} tl{} tr{} [",
+                            pic.poc,
+                            pic.frame_num,
+                            idx,
+                            g,
+                            mode,
+                            nb.has_left,
+                            nb.has_top,
+                            nb.top_left.is_some(),
+                            nb.top_right.is_some()
+                        );
+                        for &v in pred.iter() {
+                            line.push_str(&alloc::format!(" {}", v));
+                        }
+                        line.push(']');
+                        std::eprintln!("{}", line);
+                    }
                     let mut resid = *raw_resid;
                     if coded && cbp_luma & (1 << g) != 0 {
                         transform::dequant_8x8(&mut resid, m.qp_y);
@@ -3858,7 +4019,14 @@ fn mb_decode_cabac(
                         transform::dequant_4x4(&mut resid, m.qp_y);
                         transform::inverse_4x4(&mut resid)?;
                     }
-                    dbgln!("  TR mb{} blk{} qp={} coded={} post {:?}", map.idx, blk, m.qp_y, coded, &resid[..4]);
+                    dbgln!(
+                        "  TR mb{} blk{} qp={} coded={} post {:?}",
+                        map.idx,
+                        blk,
+                        m.qp_y,
+                        coded,
+                        &resid[..4]
+                    );
                     for yy in 0..4 {
                         for xx in 0..4 {
                             let v = i32::from(pred[yy * 4 + xx]) + resid[yy * 4 + xx];
@@ -3915,6 +4083,17 @@ fn mb_decode_cabac(
                 reconstruct_part(pic, cx, dpb, map, &mut m, *p)?;
             }
             // Luma residual.
+            if std::env::var_os("H264PRE").is_some() {
+                let mut line =
+                    alloc::format!("OBSPRE poc={} fn={} mb={}:", pic.poc, pic.frame_num, idx);
+                for yy in 0..16usize {
+                    let row = (py0 + yy) * pic.buf.w + px0;
+                    for xx in 0..16usize {
+                        line.push_str(&alloc::format!(" {}", pic.buf.y[row + xx]));
+                    }
+                }
+                std::eprintln!("{}", line);
+            }
             if m.transform8x8 {
                 for (g, raw_resid) in luma_res8.iter().enumerate() {
                     if raw_resid.iter().all(|&v| v == 0) {
@@ -3923,6 +4102,28 @@ fn mb_decode_cabac(
                     let (bx, by) = ((g % 2) * 8, (g / 2) * 8);
                     let mut resid = *raw_resid;
                     transform::dequant_8x8(&mut resid, m.qp_y);
+                    if std::env::var_os("H264DQ").is_some() {
+                        let mut line = alloc::format!(
+                            "dq8 poc={} fn={} mb={} g{} qp{} nz [",
+                            pic.poc,
+                            pic.frame_num,
+                            idx,
+                            g,
+                            m.qp_y
+                        );
+                        let mut first = true;
+                        for (r, &v) in resid.iter().enumerate() {
+                            if v != 0 {
+                                if !first {
+                                    line.push_str(", ");
+                                }
+                                line.push_str(&alloc::format!("({}, {})", r, v));
+                                first = false;
+                            }
+                        }
+                        line.push(']');
+                        std::eprintln!("{}", line);
+                    }
                     transform::inverse_8x8(&mut resid);
                     let o = (py0 + by) * pic.buf.w + px0 + bx;
                     transform::add_residual_8x8(&mut pic.buf.y[o..], pic.buf.w, &resid);
@@ -3953,6 +4154,28 @@ fn mb_decode_cabac(
                     let (bx, by) = block_xy(blk);
                     let mut resid = *raw_resid;
                     transform::dequant_4x4(&mut resid, m.qp_y);
+                    if std::env::var_os("H264DQ").is_some() {
+                        let mut line = alloc::format!(
+                            "dq4 poc={} fn={} mb={} b{} qp{} [",
+                            pic.poc,
+                            pic.frame_num,
+                            idx,
+                            blk,
+                            m.qp_y
+                        );
+                        let mut first = true;
+                        for (r, &v) in resid.iter().enumerate() {
+                            if v != 0 {
+                                if !first {
+                                    line.push_str(", ");
+                                }
+                                line.push_str(&alloc::format!("({}, {})", r, v));
+                                first = false;
+                            }
+                        }
+                        line.push(']');
+                        std::eprintln!("{}", line);
+                    }
                     transform::inverse_4x4(&mut resid)?;
                     if map.idx == 13 || map.idx == 2 {
                         std::eprintln!(

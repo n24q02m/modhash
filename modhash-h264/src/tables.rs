@@ -20,8 +20,13 @@ pub(crate) const FIELD_4X4: [u8; 16] = [0, 4, 1, 8, 12, 5, 9, 13, 2, 6, 10, 14, 
 /// Chroma DC 2x2 scan (spec 8.5.7): scan index -> `x + 2*y`.
 pub(crate) const SCAN_2X2: [u8; 4] = [0, 1, 2, 3];
 
-/// Zigzag scan for 8x8 blocks (spec Figure 8-9(a), CABAC path): scan
-/// index -> `x + 8*y` raster position.
+/// Zig-zag scan for 8x8 blocks (CABAC path): scan index -> flat index
+/// into OUR row-major residual block. The reference decoder's scan
+/// (`zigzag_scan8x8`, spec Table 8-8) stores coefficients transposed
+/// relative to raster; its `idct8_add` applies the 1-D pass ROWS
+/// FIRST then COLUMNS — combined with our row-major storage this
+/// reproduces it bit-exactly (verified 256/256 px on instrumented-ff
+/// recon, fixture t1_8x8_64x64 pic07 mb15, and 12/12 pictures).
 pub(crate) const ZIGZAG_8X8: [u8; 64] = [
     0, 1, 8, 16, 9, 2, 3, 10, 17, 24, 32, 25, 18, 11, 4, 5, 12, 19, 26, 33, 40, 48, 41, 34, 27, 20,
     13, 6, 7, 14, 21, 28, 35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37, 44, 51, 58, 59,

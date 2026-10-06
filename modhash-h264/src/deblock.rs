@@ -14,6 +14,10 @@ use crate::mb::{MbState, MbType};
 use crate::tables::{ALPHA_TABLE, BETA_TABLE, TC0_TABLE, block_index};
 use alloc::vec::Vec;
 
+// TEMPORARY DEBUG (h264 bisect): frame index stamped into OBSPX lines
+// so dumps are self-labeling. Remove with the bisect scaffolding.
+static PX_FRAME: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
+
 /// Boundary strengths for one MB: vertical edges at luma x = {0,4,8,12}
 /// and horizontal at y = {0,4,8,12}; each entry is the strength of the
 /// 4-sample set `k`.
@@ -27,14 +31,47 @@ fn is_intra(t: MbType) -> bool {
     t.is_intra()
 }
 
-/// Per-MB boundary-strength computation (spec 8.7.2.1, frame subset).
-/// `mb_a`/`mb_b` are the left/top neighbours of `cur`.
+/// Per-MB boundary-strength computation (spec 8.7.2.1, frame subset),
+/// replicating ffmpeg's `ff_h264_filter_mb` → `filter_mb_dir` slow path
+/// bit-for-bit — that path (not the SIMD `loop_filter_strength`) is what
+/// decoded the conformance fixtures, and it differs from the literal
+/// spec in edge *selection*:
+///
+/// - `mask_edge = {v:[0,3,3,3,1,1,1,1], h:[0,3,1,1,3,3,3,3]}[(mb_type>>3)&7]`
+///   (16x16→1, 16x8→2, 8x16→4, finer partitions→0): an internal edge
+///   `e` with `e & mask_edge` set gets bS = 0 — i.e. a 16x16 inter MB
+///   has NO internal edges filtered at all, an 8x16 MB only its
+///   partition-boundary v-edge (e=2), and so on.
+/// - `edges = (mask_edge==3 && !(cbp&15)) ? 1 : 4`: a 16x16/16x8 MB
+///   with no residual skips every internal edge.
+/// - 8x8DCT (transform_size_8x8_flag on an *inter* MB; I_8x8 intra does
+///   NOT set it in ffmpeg) skips odd internal edges only.
+/// - `mask_par0` (16x16 both dirs, +8x16 for v, +16x8 for h): when both
+///   sides of an edge share the same 16x16-ish partitioning, ffmpeg
+///   derives one `check_mv` verdict at the (0,0) block pair and applies
+///   it to the whole edge row instead of checking each 4x4 pair.
+///
+/// Strength rules themselves match the spec: intra edge → 4 (MB
+/// boundary) / 3 (internal); residual in either 4x4 → 2; else the
+/// check_mv port below (1/0).
 fn compute_bs(cur: &MbState, mb_a: Option<&MbState>, mb_b: Option<&MbState>) -> BsMap {
     let mut m = BsMap {
         v: [[0; 4]; 4],
         h: [[0; 4]; 4],
     };
     let cur_intra = is_intra(cur.mb_type);
+    // ffmpeg IS_8x8DCT: set for BOTH inter MBs with the flag and I_8x8
+    // intra (h264_cabac.c ORs it inside IS_INTRA4x4), so the odd-internal-
+    // edge skip applies to intra 8x8 too; the intra bS=4/3 arm still wins
+    // on the edges that survive the skip (filter_mb_dir order: skip
+    // first, then IS_INTRA → 3).
+    let is8 = cur.transform8x8;
+    // ffmpeg's 8x8DCT full-luma-cbp shortcut is emergent in the slow
+    // path (coded 8x8 blocks carry nnz = 16, so every edge pair derives
+    // 2 — intra neighbours still override to 4). It is an INTER-MB-only
+    // shortcut: an I_8x8 with cbp&7==7 must keep the intra arms (4 at
+    // the MB boundary, 3 on the surviving internal edges).
+    let b8_bypass = is8 && !cur_intra && (cur.cbp & 7) == 7;
     // B slices (two prediction lists) change the last bS rule: motion
     // must match on every used list, not just L0.
     let two_lists = !matches!(
@@ -49,81 +86,170 @@ fn compute_bs(cur: &MbState, mb_a: Option<&MbState>, mb_b: Option<&MbState>) -> 
             | MbType::P8x16
             | MbType::PSkip
     );
+    // Partition-shape flags (ffmpeg MB_TYPE_16x16 / MB_TYPE_16x8 /
+    // MB_TYPE_8x16): skip modes and B_Direct count as 16x16; BPart is
+    // 16x8 or 8x16 by its partition geometry.
+    let s16 = matches!(
+        cur.mb_type,
+        MbType::P16x16 | MbType::PSkip | MbType::B16x16 { .. } | MbType::BDirect | MbType::BSkip
+    );
+    let s16x8 = match cur.mb_type {
+        MbType::P16x8 => true,
+        MbType::BPart { p0, p1 } => p0.0 == 4 && p0.1 == 2 && p1.0 == 4 && p1.1 == 2,
+        _ => false,
+    };
+    let s8x16 = match cur.mb_type {
+        MbType::P8x16 => true,
+        MbType::BPart { p0, p1 } => p0.0 == 2 && p0.1 == 4 && p1.0 == 2 && p1.1 == 4,
+        _ => false,
+    };
+    // (mb_type >> 3) & 7: 16x16 → 1, 16x8 → 2, 8x16 → 4, finer → 0.
+    let idx = if s16 {
+        1
+    } else if s16x8 {
+        2
+    } else if s8x16 {
+        4
+    } else {
+        0
+    };
+    const MASK_EDGE_TAB: [[u8; 8]; 2] = [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]];
+    let mask_edge = [MASK_EDGE_TAB[0][idx], MASK_EDGE_TAB[1][idx]];
+    let edges = [
+        if mask_edge[0] == 3 && cur.cbp & 15 == 0 {
+            1
+        } else {
+            4
+        },
+        if mask_edge[1] == 3 && cur.cbp & 15 == 0 {
+            1
+        } else {
+            4
+        },
+    ];
+    // mask_par0: 16x16 in both directions; 8x16 adds v, 16x8 adds h.
+    let mask_par0 = [s16 || s8x16, s16 || s16x8];
 
-    for e in 0..4 {
-        // Edge is an MB edge when e == 0.
+    for dir in 0..2usize {
+        let (map, mask_e, edges_n, par0) = (dir, mask_edge[dir], edges[dir], mask_par0[dir]);
+        let nb_opt = if dir == 0 { mb_a } else { mb_b };
+
+        // ---- e = 0: the MB boundary ----
         for k in 0..4usize {
-            // ---- vertical edge at x4 = e, block row k ----
-            let bsv = if e == 0 {
-                match mb_a {
-                    // Picture boundary: edge not filtered.
-                    None => 0,
-                    // Cross-slice edge suppressed by this slice's idc.
-                    Some(nb) if nb.slice_id != cur.slice_id && cur.disable_deblock_idc == 2 => 0,
-                    Some(nb) => {
-                        let p_blk = block_index(3, k);
-                        let q_blk = block_index(0, k);
-                        if cur_intra || is_intra(nb.mb_type) {
-                            4
-                        } else if cur.nz[q_blk] > 0 || nb.nz[p_blk] > 0 {
+            let bs0 = match nb_opt {
+                // Picture boundary: edge not filtered.
+                None => 0,
+                // Cross-slice edge suppressed by this slice's idc.
+                Some(nb) if nb.slice_id != cur.slice_id && cur.disable_deblock_idc == 2 => 0,
+                Some(nb) => {
+                    let (q_blk, p_blk) = if dir == 0 {
+                        (block_index(0, k), block_index(3, k))
+                    } else {
+                        (block_index(k, 0), block_index(k, 3))
+                    };
+                    if b8_bypass {
+                        if is_intra(nb.mb_type) { 4 } else { 2 }
+                    } else if cur_intra || is_intra(nb.mb_type) {
+                        4
+                    } else {
+                        let nb_par = match nb.mb_type {
+                            MbType::P16x16
+                            | MbType::PSkip
+                            | MbType::B16x16 { .. }
+                            | MbType::BDirect
+                            | MbType::BSkip => true,
+                            MbType::P16x8 => dir == 1,
+                            MbType::P8x16 => dir == 0,
+                            MbType::BPart { p0, p1 } => {
+                                if dir == 0 {
+                                    p0.0 == 2 && p0.1 == 4 && p1.0 == 2 && p1.1 == 4
+                                } else {
+                                    p0.0 == 4 && p0.1 == 2 && p1.0 == 4 && p1.1 == 2
+                                }
+                            }
+                            _ => false,
+                        };
+                        // par0: one check_mv verdict at the (0,0) pair
+                        // seeds the row; nnz still overrides per block.
+                        let mut verdict = 0u8;
+                        let mut mv_done = false;
+                        if par0 && nb_par {
+                            let (qc, pc) = if dir == 0 {
+                                (block_index(0, 0), block_index(3, 0))
+                            } else {
+                                (block_index(0, 0), block_index(0, 3))
+                            };
+                            verdict = mv_diff_bs(cur, nb, qc, pc, two_lists);
+                            mv_done = true;
+                        }
+                        if cur.nz[q_blk] > 0 || nb.nz[p_blk] > 0 {
                             2
-                        } else {
+                        } else if !mv_done {
                             mv_diff_bs(cur, nb, q_blk, p_blk, two_lists)
+                        } else {
+                            verdict
                         }
                     }
                 }
-            } else {
-                let p_blk = block_index(e - 1, k);
-                let q_blk = block_index(e, k);
-                if cur.transform8x8 && e % 2 == 1 {
-                    // Edges *inside* an 8x8 transform block are not
-                    // filtered — the transform's coverage is an 8x8
-                    // region, so only the 8x8-grid edge (e = 2) and
-                    // the MB boundary can carry a bS (spec 8.7.2.1
-                    // `filterInternalEdgesFlag` / reference skips the
-                    // odd edges for MB_TYPE_8x8DCT).
-                    0
-                } else if cur_intra {
-                    3
-                } else if cur.nz[p_blk] > 0 || cur.nz[q_blk] > 0 {
-                    2
-                } else {
-                    mv_diff_bs(cur, cur, q_blk, p_blk, two_lists)
-                }
             };
-            m.v[e][k] = bsv;
+            if map == 0 {
+                m.v[0][k] = bs0;
+            } else {
+                m.h[0][k] = bs0;
+            }
+        }
 
-            // ---- horizontal edge at y4 = e, block column k ----
-            let bsh = if e == 0 {
-                match mb_b {
-                    None => 0,
-                    Some(nb) if nb.slice_id != cur.slice_id && cur.disable_deblock_idc == 2 => 0,
-                    Some(nb) => {
-                        let p_blk = block_index(k, 3);
-                        let q_blk = block_index(k, 0);
-                        if cur_intra || is_intra(nb.mb_type) {
-                            4
-                        } else if cur.nz[q_blk] > 0 || nb.nz[p_blk] > 0 {
-                            2
-                        } else {
-                            mv_diff_bs(cur, nb, q_blk, p_blk, two_lists)
-                        }
+        // ---- internal edges e = 1..4 ----
+        for e in 1..4usize {
+            if e >= edges_n {
+                break;
+            }
+            if is8 && e % 2 == 1 {
+                // 8x8DCT (I_8x8 included — ff trace f3 MB(3,1) t8=true
+                // shows e=1/e=3 NOT dumped while t8=false MB(3,0) has
+                // bs=3333 on e=1..3): odd internal edges are never
+                // deblocked.
+                continue;
+            }
+            let mut row = [0u8; 4];
+            if cur_intra {
+                row = [3; 4];
+            } else {
+                let mut mv_done = false;
+                if e & usize::from(mask_e) != 0 {
+                    // Masked edge: bS starts at 0, no motion check —
+                    // nnz below still forces 2 where present.
+                    mv_done = true;
+                } else if par0 {
+                    // Single verdict at this edge's first block pair
+                    // seeds the row; nnz still overrides per block.
+                    let (qc, pc) = if dir == 0 {
+                        (block_index(e, 0), block_index(e - 1, 0))
+                    } else {
+                        (block_index(0, e), block_index(0, e - 1))
+                    };
+                    let v = mv_diff_bs(cur, cur, qc, pc, two_lists);
+                    row = [v; 4];
+                    mv_done = true;
+                }
+                for k in 0..4usize {
+                    let (q_blk, p_blk) = if dir == 0 {
+                        (block_index(e, k), block_index(e - 1, k))
+                    } else {
+                        (block_index(k, e), block_index(k, e - 1))
+                    };
+                    if cur.nz[q_blk] > 0 || cur.nz[p_blk] > 0 {
+                        row[k] = 2;
+                    } else if !mv_done {
+                        row[k] = mv_diff_bs(cur, cur, q_blk, p_blk, two_lists);
                     }
                 }
+            }
+            if map == 0 {
+                m.v[e] = row;
             } else {
-                let p_blk = block_index(k, e - 1);
-                let q_blk = block_index(k, e);
-                if cur.transform8x8 && e % 2 == 1 {
-                    0
-                } else if cur_intra {
-                    3
-                } else if cur.nz[p_blk] > 0 || cur.nz[q_blk] > 0 {
-                    2
-                } else {
-                    mv_diff_bs(cur, cur, q_blk, p_blk, two_lists)
-                }
-            };
-            m.h[e][k] = bsh;
+                m.h[e] = row;
+            }
         }
     }
     m
@@ -286,6 +412,27 @@ fn filter_v_edge(
         // Order for filter_set: [p0..p3] ascending distance.
         let p_ord = [p[0], p[1], p[2], p[3]];
         let qp_av = (i32::from(qp_p[k]) + i32::from(qp_q) + 1) >> 1;
+        // TEMPORARY DEBUG (h264 bisect): before-pixels of this set.
+        {
+            extern crate std;
+            if std::env::var_os("H264PX2").is_some() {
+                std::eprintln!(
+                    "OBSPX{} v f={} y={} x={} {} {} {} {} {} {} {} {}",
+                    if chroma { "c" } else { "l" },
+                    PX_FRAME.load(core::sync::atomic::Ordering::Relaxed),
+                    y,
+                    x,
+                    p[0],
+                    p[1],
+                    p[2],
+                    p[3],
+                    q[0],
+                    q[1],
+                    q[2],
+                    q[3]
+                );
+            }
+        }
         let (po, qo) = filter_set(&p_ord, &q, b, qp_av, off_a, off_b, chroma);
         row[x - 1] = po[0].clamp(0, 255) as u8;
         row[x - 2] = po[1].clamp(0, 255) as u8;
@@ -320,6 +467,27 @@ fn filter_h_edge(
         let p: [i32; 4] = [px(-1), px(-2), px(-3), px(-4)];
         let q: [i32; 4] = [px(0), px(1), px(2), px(3)];
         let qp_av = (i32::from(qp_p[k]) + i32::from(qp_q) + 1) >> 1;
+        // TEMPORARY DEBUG (h264 bisect): before-pixels of this set.
+        {
+            extern crate std;
+            if std::env::var_os("H264PX2").is_some() {
+                std::eprintln!(
+                    "OBSPX{} h f={} y={} x={} {} {} {} {} {} {} {} {}",
+                    if chroma { "c" } else { "l" },
+                    PX_FRAME.load(core::sync::atomic::Ordering::Relaxed),
+                    y,
+                    x,
+                    p[0],
+                    p[1],
+                    p[2],
+                    p[3],
+                    q[0],
+                    q[1],
+                    q[2],
+                    q[3]
+                );
+            }
+        }
         let (po, qo) = filter_set(&p, &q, b, qp_av, off_a, off_b, chroma);
         plane[(y - 1) * stride + x] = po[0].clamp(0, 255) as u8;
         plane[(y - 2) * stride + x] = po[1].clamp(0, 255) as u8;
@@ -350,6 +518,28 @@ pub(crate) fn filter_frame(
     chroma_off_cb: i32,
     chroma_off_cr: i32,
 ) {
+    extern crate std;
+    // TEMPORARY DEBUG (h264 bisect): self-labeling dump frames.
+    if std::env::var_os("H264PX2").is_some() {
+        PX_FRAME.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+    }
+    // TEMPORARY DEBUG (h264 bisect): full-plane pre/post dumps.
+    let full_frame_idx = {
+        extern crate std;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static FULLF: AtomicUsize = AtomicUsize::new(0);
+        if std::env::var_os("H264FULLDUMP").is_some() {
+            let f = FULLF.fetch_add(1, Ordering::Relaxed);
+            let tmp = std::env::temp_dir();
+            let _ = std::fs::write(
+                tmp.join(std::format!("hd_pre_{f}.bin")),
+                &y[..4096.min(y.len())],
+            );
+            f
+        } else {
+            usize::MAX
+        }
+    };
     // Precompute the per-plane luma-QP -> chroma-QP tables (52 entries
     // each) so every edge lookup is a single index.
     let mut qpcb = [0u8; 52];
@@ -397,6 +587,59 @@ pub(crate) fn filter_frame(
         );
     }
 
+    // TEMPORARY DEBUG (h264 bisect): dump per-MB bS maps in the same
+    // shape as the instrumented ffmpeg FLTDUMP trace. Remove with the
+    // bisect scaffolding.
+    {
+        extern crate std;
+        if std::env::var_os("H264BSDUMP").is_some() {
+            use core::sync::atomic::{AtomicUsize, Ordering};
+            static DUMP_FRAME: AtomicUsize = AtomicUsize::new(0);
+            std::eprintln!("OBSFRAME {}", DUMP_FRAME.fetch_add(1, Ordering::Relaxed));
+            for dmb_y in 0..height_mbs {
+                for dmb_x in 0..width_mbs {
+                    let dm = &mbs[dmb_y * width_mbs + dmb_x];
+                    std::eprintln!(
+                        "OBSMB mb=({},{}) t8={} cbp={} qp={} type={:?} modes={:?} nz={:?}",
+                        dmb_x,
+                        dmb_y,
+                        dm.transform8x8,
+                        dm.cbp,
+                        dm.qp_y,
+                        dm.mb_type,
+                        &dm.i4x4_modes[..],
+                        &dm.nz[..16],
+                    );
+                    let m = &maps[dmb_y * width_mbs + dmb_x];
+                    for e in 0..4usize {
+                        std::eprintln!(
+                            "OBS mb=({},{}) v e={} bs={}{}{}{}",
+                            dmb_x,
+                            dmb_y,
+                            e,
+                            m.v[e][0],
+                            m.v[e][1],
+                            m.v[e][2],
+                            m.v[e][3]
+                        );
+                    }
+                    for e in 0..4usize {
+                        std::eprintln!(
+                            "OBS mb=({},{}) h e={} bs={}{}{}{}",
+                            dmb_x,
+                            dmb_y,
+                            e,
+                            m.h[e][0],
+                            m.h[e][1],
+                            m.h[e][2],
+                            m.h[e][3]
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     for mb_y in 0..height_mbs {
         for mb_x in 0..width_mbs {
             let idx = mb_y * width_mbs + mb_x;
@@ -433,6 +676,22 @@ pub(crate) fn filter_frame(
                         qp_p.fill(cur.qp_y);
                     }
                     let one = bs.v[e][band];
+                    // TEMPORARY DEBUG (h264 bisect): per-edge filter inputs.
+                    {
+                        extern crate std;
+                        if std::env::var_os("H264FLT2").is_some() && one > 0 {
+                            std::eprintln!(
+                                "OBSFLT mb=({},{}) v e={} qp={} a={} b={} bs={}",
+                                mb_x,
+                                mb_y,
+                                e,
+                                qp_p[0],
+                                off_a,
+                                off_b,
+                                one
+                            );
+                        }
+                    }
                     filter_v_edge(
                         y, stride, x, y0, &[one; 4], &qp_p, cur.qp_y, off_a, off_b, false,
                     );
@@ -459,6 +718,22 @@ pub(crate) fn filter_frame(
                     // filter_h_edge covers cols x0..x0+3 per call -> need 4 calls
                     for cg in 0..4usize {
                         let one = bs.h[band][cg];
+                        // TEMPORARY DEBUG (h264 bisect): per-edge filter inputs.
+                        {
+                            extern crate std;
+                            if std::env::var_os("H264FLT2").is_some() && one > 0 {
+                                std::eprintln!(
+                                    "OBSFLT mb=({},{}) h e={} qp={} a={} b={} bs={}",
+                                    mb_x,
+                                    mb_y,
+                                    band,
+                                    qp_p[0],
+                                    off_a,
+                                    off_b,
+                                    one
+                                );
+                            }
+                        }
                         filter_h_edge(
                             y,
                             stride,
@@ -559,5 +834,12 @@ pub(crate) fn filter_frame(
                 }
             }
         }
+    }
+    if full_frame_idx != usize::MAX {
+        let tmp = std::env::temp_dir();
+        let _ = std::fs::write(
+            tmp.join(std::format!("hd_post_{}.bin", full_frame_idx)),
+            &y[..4096.min(y.len())],
+        );
     }
 }

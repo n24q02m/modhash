@@ -70,6 +70,17 @@ impl<'a> Cabac<'a> {
             }
             *st = pre as u8;
         }
+        crate::dbgln!(
+            "cinit qp={} idc={} st11={} st14={} st15={} st16={} st40={} st47={}",
+            qp,
+            init_idc,
+            state[11],
+            state[14],
+            state[15],
+            state[16],
+            state[40],
+            state[47],
+        );
         let mut c = Cabac {
             data,
             pos: 0,
@@ -78,6 +89,7 @@ impl<'a> Cabac<'a> {
             state,
         };
         c.init_offset();
+        crate::dbgln!("initoff={} pos={}", c.offset, c.pos);
         c
     }
 
