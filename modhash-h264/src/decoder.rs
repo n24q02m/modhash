@@ -3252,6 +3252,9 @@ fn mb_decode_cabac(
                 cnt += 1;
             }
             let code = cab.b_mb_type(cnt)?;
+            if std::env::var("MTDBG").is_ok() {
+                std::eprintln!("MT poc={} mb=({},{}) code={} spat={}", cx.cur_poc, map.x, map.y, code, cx.h.direct_spatial);
+            }
             if code >= 23 {
                 MbType::i_slice(u32::from(code) - 23)?
             } else {
@@ -3855,6 +3858,7 @@ fn mb_decode_cabac(
                         transform::dequant_4x4(&mut resid, m.qp_y);
                         transform::inverse_4x4(&mut resid)?;
                     }
+                    dbgln!("  TR mb{} blk{} qp={} coded={} post {:?}", map.idx, blk, m.qp_y, coded, &resid[..4]);
                     for yy in 0..4 {
                         for xx in 0..4 {
                             let v = i32::from(pred[yy * 4 + xx]) + resid[yy * 4 + xx];

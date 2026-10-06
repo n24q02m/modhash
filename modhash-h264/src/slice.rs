@@ -379,7 +379,7 @@ pub(crate) fn parse_header(
     }
 
     crate::dbgln!(
-        "sh fnum={} st={} nr0={} nr1={} wp0={} wp1={} idc={} dbfc={} oa={} ob={}",
+        "sh fnum={} st={} nr0={} nr1={} wp0={} wp1={} idc={} dbfc={} oa={} ob={} qp={} mark={} bitpos={}",
         frame_num,
         slice_type as u8,
         num_ref_idx_l0_active,
@@ -389,7 +389,10 @@ pub(crate) fn parse_header(
         disable_deblock_idc,
         pps.deblocking_control,
         offset_a,
-        offset_b
+        offset_b,
+        slice_qp_delta,
+        mmco.len(),
+        br.position()
     );
 
     Ok(SliceHeader {
