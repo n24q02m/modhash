@@ -13,6 +13,9 @@ docs/_site/
 /modhash-h264/ff_*
 /modhash-h264/cabac_*
 /modhash-h264/er_ref.c
+/modhash-h264/h264dec_h.h
+/modhash-h264/h264dec_ref.c
+/modhash-h264/h264tabs_ref.c
 /modhash-h264/h264_*
 /modhash-h264/mpegvideo_ref.c
 /modhash-h264/mvpred_ref.h
