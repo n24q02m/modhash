@@ -278,8 +278,8 @@ impl<'a> Cabac<'a> {
 
     /// `mb_type` on a B slice (ctx 27..35 + intra 32..35 tail).
     /// `ctx` counts non-direct neighbours (0..2). Returns spec
-    /// Table 7-13 codes (0..22) or 23 = intra (the caller runs
-    /// [`intra_mb_type`] for the I-tail).
+    /// Table 7-13 codes 0..22, or 23 + intra tail code (the
+    /// `bits==13` branch runs [`intra_mb_type`] at ctx base 32).
     pub(crate) fn b_mb_type(&mut self, ctx: usize) -> Result<u8> {
         if self.decision(27 + ctx)? == 0 {
             return Ok(0); // B_Direct_16x16
@@ -293,7 +293,9 @@ impl<'a> Cabac<'a> {
         bits |= self.decision(27 + 5)?;
         match bits {
             0..=7 => Ok(bits + 3),
-            13 => Ok(23), // intra tail
+            // bits==13 enters ffmpeg's decode_cabac_intra_mb_type(sl, 32, 0):
+            // the ctx-32 discriminator (0 = I4x4) plus the I16x16/PCM tree.
+            13 => Ok(23 + self.intra_mb_type(32, 0)?),
             14 => Ok(11),
             15 => Ok(22),
             _ => {
@@ -336,6 +338,9 @@ impl<'a> Cabac<'a> {
         if self.decision(68)? != 0 {
             return Ok(mpm);
         }
+        // ffmpeg decode_cabac_mb_intra4x4_pred_mode (h264_cabac.c:1374):
+        // the 3 rem bits are context-coded on ctx 69 — the SAME context
+        // read three times (NOT bypass, NOT 69/70/71), LSB-first.
         let mut mode = self.decision(69)?;
         mode += 2 * self.decision(69)?;
         mode += 4 * self.decision(69)?;
