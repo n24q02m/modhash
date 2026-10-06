@@ -573,7 +573,10 @@ pub(crate) fn pred8x8(mode: u8, nb: &NbSamples, out: &mut [u8; 64]) {
     t[7] = (tr_raw[0] + 2 * t_raw[7] + t_raw[6] + 2) >> 2;
     if has_tr {
         for i in 8..15 {
-            t[i] = (tr_raw[i - 8 - 1] + 2 * tr_raw[i - 8] + tr_raw[i - 7] + 2) >> 2;
+            // PTR(8) reads SRC(7,-1) — the *unfiltered* last top
+            // sample — not filtered t[7] (ffmpeg pred8x8l).
+            let a = if i == 8 { t_raw[7] } else { tr_raw[i - 9] };
+            t[i] = (a + 2 * tr_raw[i - 8] + tr_raw[i - 7] + 2) >> 2;
         }
         t[15] = (tr_raw[6] + 3 * tr_raw[7] + 2) >> 2;
     } else {
@@ -851,18 +854,18 @@ pub(crate) fn pred8x8(mode: u8, nb: &NbSamples, out: &mut [u8; 64]) {
             set(out, 3, 1, (l[0] + 2 * lt + t[0] + 2) >> 2);
             set(out, 5, 2, (l[0] + 2 * lt + t[0] + 2) >> 2);
             set(out, 7, 3, (l[0] + 2 * lt + t[0] + 2) >> 2);
-            set(out, 2, 0, (t[0] + 2 * t[1] + t[0] + 2) >> 2);
-            set(out, 4, 1, (t[0] + 2 * t[1] + t[0] + 2) >> 2);
-            set(out, 6, 2, (t[0] + 2 * t[1] + t[0] + 2) >> 2);
-            set(out, 3, 0, (t[1] + 2 * t[2] + t[1] + 2) >> 2);
-            set(out, 5, 1, (t[1] + 2 * t[2] + t[1] + 2) >> 2);
-            set(out, 7, 2, (t[1] + 2 * t[2] + t[1] + 2) >> 2);
-            set(out, 4, 0, (t[2] + 2 * t[3] + t[2] + 2) >> 2);
-            set(out, 6, 1, (t[2] + 2 * t[3] + t[2] + 2) >> 2);
-            set(out, 5, 0, (t[3] + 2 * t[4] + t[3] + 2) >> 2);
-            set(out, 7, 1, (t[3] + 2 * t[4] + t[3] + 2) >> 2);
-            set(out, 6, 0, (t[4] + 2 * t[5] + t[4] + 2) >> 2);
-            set(out, 7, 0, (t[5] + 2 * t[6] + t[5] + 2) >> 2);
+            set(out, 2, 0, (t[1] + 2 * t[0] + lt + 2) >> 2);
+            set(out, 4, 1, (t[1] + 2 * t[0] + lt + 2) >> 2);
+            set(out, 6, 2, (t[1] + 2 * t[0] + lt + 2) >> 2);
+            set(out, 3, 0, (t[2] + 2 * t[1] + t[0] + 2) >> 2);
+            set(out, 5, 1, (t[2] + 2 * t[1] + t[0] + 2) >> 2);
+            set(out, 7, 2, (t[2] + 2 * t[1] + t[0] + 2) >> 2);
+            set(out, 4, 0, (t[3] + 2 * t[2] + t[1] + 2) >> 2);
+            set(out, 6, 1, (t[3] + 2 * t[2] + t[1] + 2) >> 2);
+            set(out, 5, 0, (t[4] + 2 * t[3] + t[2] + 2) >> 2);
+            set(out, 7, 1, (t[4] + 2 * t[3] + t[2] + 2) >> 2);
+            set(out, 6, 0, (t[5] + 2 * t[4] + t[3] + 2) >> 2);
+            set(out, 7, 0, (t[6] + 2 * t[5] + t[4] + 2) >> 2);
         }
         // Intra_8x8_Vertical_Left (spec 8-69): top + top-right only —
         // literal port of ffmpeg `pred8x8l_vertical_left`.
