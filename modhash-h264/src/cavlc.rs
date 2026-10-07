@@ -16,18 +16,6 @@
 //! a level prefix longer than 28, or a truncated suffix all `Err` out
 //! — no path panics or wraps silently.
 
-#[cfg(debug_assertions)]
-macro_rules! stde {
-    ($($a:tt)*) => {{
-        extern crate std;
-        std::eprintln!($($a)*);
-    }};
-}
-#[cfg(not(debug_assertions))]
-macro_rules! stde {
-    ($($a:tt)*) => {{}};
-}
-
 use crate::golomb::Br;
 use crate::tables::{
     CHROMA_DC_COEFF_TOKEN_BITS, CHROMA_DC_COEFF_TOKEN_LENS, CHROMA_DC_TOTAL_ZEROS_BITS,
@@ -118,11 +106,6 @@ fn coeff_token(br: &mut Br<'_>, nc: i32) -> Result<(u8, u8)> {
         // `TotalCoeff * 4 + TrailingOnes` index. Code 2 is reserved and
         // never emitted by a conforming encoder.
         let code = br.bits(6)?;
-        stde!(
-            "      FLC code {code} -> tc{} t1{}",
-            (code + 4) / 4,
-            (code + 4) % 4
-        );
         return match code {
             0 => Ok((1, 0)),
             1 => Ok((1, 1)),
@@ -162,13 +145,7 @@ fn level_prefix(br: &mut Br<'_>) -> Result<u32> {
 /// (spec 9.2.1); it is ignored for [`BlockKind::ChromaDc`].
 pub(crate) fn decode_block(br: &mut Br<'_>, nc: i32, kind: BlockKind) -> Result<Residual> {
     let max_coeff = kind.max_coeff();
-    #[allow(unused_variables)] // consumed only by stde! (debug tracing)
-    let pos0 = br.position();
     let (total_coeff, trailing_ones) = coeff_token(br, nc)?;
-    stde!(
-        "    cblk@{pos0} nc{nc} tc{total_coeff} t1{trailing_ones} after_token {}",
-        br.position()
-    );
     if total_coeff as usize > max_coeff {
         return Err(Error::BadValue(
             "h264 CAVLC: total_coeff exceeds block size",
@@ -203,13 +180,7 @@ pub(crate) fn decode_block(br: &mut Br<'_>, nc: i32, kind: BlockKind) -> Result<
         // than 3 trailing ones were seen.
         let mut suffix_length: u32 = u32::from(total > 10 && t1 < 3);
         for (i, l) in level.iter_mut().enumerate().take(total).skip(t1) {
-            #[allow(unused_variables)] // consumed only by stde! (debug tracing)
-            let lp_pos = br.position();
             let prefix = level_prefix(br)? as i64;
-            stde!(
-                "      lvl{i} prefix{prefix} @ {lp_pos} -> {}",
-                br.position()
-            );
             let sl = suffix_length;
             let suffix_size: u32 = match prefix.cmp(&14) {
                 core::cmp::Ordering::Less => sl,
@@ -267,10 +238,7 @@ pub(crate) fn decode_block(br: &mut Br<'_>, nc: i32, kind: BlockKind) -> Result<
                 &TOTAL_ZEROS_BITS[total - 1][..],
             ),
         };
-        #[allow(unused_variables)] // consumed only by stde! (debug tracing)
-        let tz_pos = br.position();
         let idx = vlc(br, lens, bits)?;
-        stde!("      total_zeros {idx} @ {tz_pos} -> {}", br.position());
         if idx > max_coeff - total {
             return Err(Error::BadValue("h264 CAVLC: total_zeros out of range"));
         }
@@ -284,14 +252,8 @@ pub(crate) fn decode_block(br: &mut Br<'_>, nc: i32, kind: BlockKind) -> Result<
     for &lv in level.iter().take(total).skip(1) {
         let run_before = if zeros > 0 {
             let row = (zeros - 1).min(6);
-            #[allow(unused_variables)] // consumed only by stde! (debug tracing)
-            let rb_pos = br.position();
-            let v = vlc(br, &RUN_BEFORE_LENS[row], &RUN_BEFORE_BITS[row])?;
-            stde!(
-                "      run_before {v} zeros{zeros} @ {rb_pos} -> {}",
-                br.position()
-            );
-            v
+
+            vlc(br, &RUN_BEFORE_LENS[row], &RUN_BEFORE_BITS[row])?
         } else {
             0
         };

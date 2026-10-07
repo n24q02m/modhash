@@ -35,9 +35,6 @@ pub(crate) struct Cabac<'a> {
 pub(crate) struct MvdBits {
     /// The decoded (signed) value.
     pub value: i32,
-    /// Its magnitude clamped to <=70 — what the neighbour-sum context
-    /// (`amvd`) uses, per the reference implementation's mvd cache.
-    pub mag: u8,
 }
 
 impl<'a> Cabac<'a> {
@@ -70,17 +67,6 @@ impl<'a> Cabac<'a> {
             }
             *st = pre as u8;
         }
-        crate::dbgln!(
-            "cinit qp={} idc={} st11={} st14={} st15={} st16={} st40={} st47={}",
-            qp,
-            init_idc,
-            state[11],
-            state[14],
-            state[15],
-            state[16],
-            state[40],
-            state[47],
-        );
         let mut c = Cabac {
             data,
             pos: 0,
@@ -89,7 +75,6 @@ impl<'a> Cabac<'a> {
             state,
         };
         c.init_offset();
-        crate::dbgln!("initoff={} pos={}", c.offset, c.pos);
         c
     }
 
@@ -148,15 +133,6 @@ impl<'a> Cabac<'a> {
             ((s & 1) ^ 1) as u8
         };
         self.renorm()?;
-        crate::dbgln!(
-            "  bin ctx={} bit={} s0={} pos={} range={} off={}",
-            ctx,
-            bit,
-            s,
-            self.pos,
-            self.range,
-            self.offset
-        );
         Ok(bit)
     }
 
@@ -170,13 +146,6 @@ impl<'a> Cabac<'a> {
             self.offset -= self.range;
             1
         };
-        crate::dbgln!(
-            "  byp bit={} pos={} range={} off={}",
-            b,
-            self.pos,
-            self.range,
-            self.offset
-        );
         Ok(b)
     }
 
@@ -186,12 +155,6 @@ impl<'a> Cabac<'a> {
     /// positive value, matching the spec's sign_flag (0 = positive).
     fn bypass_sign(&mut self, v: i32) -> Result<i32> {
         if self.bypass()? == 0 { Ok(-v) } else { Ok(v) }
-    }
-
-    /// Current bit position in the RBSP (diagnostics only).
-    #[allow(dead_code)]
-    pub(crate) fn pos(&self) -> usize {
-        self.pos
     }
 
     /// `decodeTerminate` (spec 9.3.4.2.5).
@@ -206,13 +169,6 @@ impl<'a> Cabac<'a> {
         } else {
             true
         };
-        crate::dbgln!(
-            "  term bit={} pos={} range={} off={}",
-            t as u8,
-            self.pos,
-            self.range,
-            self.offset
-        );
         Ok(t)
     }
 
@@ -241,12 +197,6 @@ impl<'a> Cabac<'a> {
         } else {
             Err(Error::BadValue("h264 cabac pcm overrun"))
         }
-    }
-
-    /// Bits consumed so far.
-    #[allow(dead_code)]
-    pub(crate) fn position(&self) -> usize {
-        self.pos
     }
 
     // ---------------------------------------------------------------
@@ -480,7 +430,7 @@ impl<'a> Cabac<'a> {
     pub(crate) fn mvd(&mut self, ctxbase: usize, amvd: u32) -> Result<MvdBits> {
         let ctx = ctxbase + usize::from(amvd > 2) + usize::from(amvd > 32);
         if self.decision(ctx)? == 0 {
-            return Ok(MvdBits { value: 0, mag: 0 });
+            return Ok(MvdBits { value: 0 });
         }
         let mut mvd = 1i32;
         let mut cb = ctxbase + 3;
@@ -490,7 +440,6 @@ impl<'a> Cabac<'a> {
             }
             mvd += 1;
         }
-        let mag: u8;
         if mvd >= 9 {
             // UEG3 tail: unary prefix ones then a k-bit suffix.
             let mut k = 3;
@@ -505,12 +454,9 @@ impl<'a> Cabac<'a> {
                 k -= 1;
                 mvd += i32::from(self.bypass()?) << k;
             }
-            mag = mvd.min(70) as u8;
-        } else {
-            mag = mvd as u8;
         }
         let value = self.bypass_sign(-mvd)?;
-        Ok(MvdBits { value, mag })
+        Ok(MvdBits { value })
     }
 
     /// `mb_qp_delta` (ctx 60..63). `prev_diff` is the previous MB's
@@ -671,8 +617,8 @@ pub(crate) fn decode_residual(
     let mut count = 0usize;
     if cat == ResCat::Luma8x8 {
         let mut ended_by_last = false;
-        for pos in 0..63usize {
-            if cb.decision(sig_base + SIG_OFFSET_8X8[pos] as usize)? != 0 {
+        for (pos, &sig_off) in SIG_OFFSET_8X8.iter().enumerate().take(63) {
+            if cb.decision(sig_base + sig_off as usize)? != 0 {
                 index[count] = pos;
                 count += 1;
                 if cb.decision(last_base + t::LAST_COEFF_8X8[pos] as usize)? != 0 {

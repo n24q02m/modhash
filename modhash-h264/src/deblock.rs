@@ -14,10 +14,6 @@ use crate::mb::{MbState, MbType};
 use crate::tables::{ALPHA_TABLE, BETA_TABLE, TC0_TABLE, block_index};
 use alloc::vec::Vec;
 
-// TEMPORARY DEBUG (h264 bisect): frame index stamped into OBSPX lines
-// so dumps are self-labeling. Remove with the bisect scaffolding.
-static PX_FRAME: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
-
 /// Boundary strengths for one MB: vertical edges at luma x = {0,4,8,12}
 /// and horizontal at y = {0,4,8,12}; each entry is the strength of the
 /// 4-sample set `k`.
@@ -239,16 +235,16 @@ fn compute_bs(cur: &MbState, mb_a: Option<&MbState>, mb_b: Option<&MbState>) -> 
                     row = [v; 4];
                     mv_done = true;
                 }
-                for k in 0..4usize {
+                for (k, rk) in row.iter_mut().enumerate() {
                     let (q_blk, p_blk) = if dir == 0 {
                         (block_index(e, k), block_index(e - 1, k))
                     } else {
                         (block_index(k, e), block_index(k, e - 1))
                     };
                     if cur.nz[q_blk] > 0 || cur.nz[p_blk] > 0 {
-                        row[k] = 2;
+                        *rk = 2;
                     } else if !mv_done {
-                        row[k] = mv_diff_bs(cur, cur, q_blk, p_blk, two_lists);
+                        *rk = mv_diff_bs(cur, cur, q_blk, p_blk, two_lists);
                     }
                 }
             }
@@ -419,27 +415,6 @@ fn filter_v_edge(
         // Order for filter_set: [p0..p3] ascending distance.
         let p_ord = [p[0], p[1], p[2], p[3]];
         let qp_av = (i32::from(qp_p[k]) + i32::from(qp_q) + 1) >> 1;
-        // TEMPORARY DEBUG (h264 bisect): before-pixels of this set.
-        {
-            extern crate std;
-            if std::env::var_os("H264PX2").is_some() {
-                std::eprintln!(
-                    "OBSPX{} v f={} y={} x={} {} {} {} {} {} {} {} {}",
-                    if chroma { "c" } else { "l" },
-                    PX_FRAME.load(core::sync::atomic::Ordering::Relaxed),
-                    y,
-                    x,
-                    p[0],
-                    p[1],
-                    p[2],
-                    p[3],
-                    q[0],
-                    q[1],
-                    q[2],
-                    q[3]
-                );
-            }
-        }
         let (po, qo) = filter_set(&p_ord, &q, b, qp_av, off_a, off_b, chroma);
         row[x - 1] = po[0].clamp(0, 255) as u8;
         row[x - 2] = po[1].clamp(0, 255) as u8;
@@ -474,27 +449,6 @@ fn filter_h_edge(
         let p: [i32; 4] = [px(-1), px(-2), px(-3), px(-4)];
         let q: [i32; 4] = [px(0), px(1), px(2), px(3)];
         let qp_av = (i32::from(qp_p[k]) + i32::from(qp_q) + 1) >> 1;
-        // TEMPORARY DEBUG (h264 bisect): before-pixels of this set.
-        {
-            extern crate std;
-            if std::env::var_os("H264PX2").is_some() {
-                std::eprintln!(
-                    "OBSPX{} h f={} y={} x={} {} {} {} {} {} {} {} {}",
-                    if chroma { "c" } else { "l" },
-                    PX_FRAME.load(core::sync::atomic::Ordering::Relaxed),
-                    y,
-                    x,
-                    p[0],
-                    p[1],
-                    p[2],
-                    p[3],
-                    q[0],
-                    q[1],
-                    q[2],
-                    q[3]
-                );
-            }
-        }
         let (po, qo) = filter_set(&p, &q, b, qp_av, off_a, off_b, chroma);
         plane[(y - 1) * stride + x] = po[0].clamp(0, 255) as u8;
         plane[(y - 2) * stride + x] = po[1].clamp(0, 255) as u8;
@@ -525,28 +479,6 @@ pub(crate) fn filter_frame(
     chroma_off_cb: i32,
     chroma_off_cr: i32,
 ) {
-    extern crate std;
-    // TEMPORARY DEBUG (h264 bisect): self-labeling dump frames.
-    if std::env::var_os("H264PX2").is_some() {
-        PX_FRAME.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
-    }
-    // TEMPORARY DEBUG (h264 bisect): full-plane pre/post dumps.
-    let full_frame_idx = {
-        extern crate std;
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        static FULLF: AtomicUsize = AtomicUsize::new(0);
-        if std::env::var_os("H264FULLDUMP").is_some() {
-            let f = FULLF.fetch_add(1, Ordering::Relaxed);
-            let tmp = std::env::temp_dir();
-            let _ = std::fs::write(
-                tmp.join(std::format!("hd_pre_{f}.bin")),
-                &y[..4096.min(y.len())],
-            );
-            f
-        } else {
-            usize::MAX
-        }
-    };
     // Precompute the per-plane luma-QP -> chroma-QP tables (52 entries
     // each) so every edge lookup is a single index.
     let mut qpcb = [0u8; 52];
@@ -571,79 +503,6 @@ pub(crate) fn filter_frame(
                 None
             };
             maps.push(compute_bs(cur, a, b));
-        }
-    }
-    {
-        extern crate std;
-        let tot: u32 = maps
-            .iter()
-            .map(|m| {
-                m.v.iter().flatten().map(|&v| u32::from(v)).sum::<u32>()
-                    + m.h.iter().flatten().map(|&v| u32::from(v)).sum::<u32>()
-            })
-            .sum();
-        std::eprintln!(
-            "dbf bs_total={} intra={:?} nz={:?}",
-            tot,
-            mbs.iter()
-                .map(|m| m.mb_type.is_intra() as u8)
-                .collect::<Vec<_>>(),
-            mbs.iter()
-                .map(|m| m.nz.iter().map(|&v| v > 0).count() as u8)
-                .collect::<Vec<_>>()
-        );
-    }
-
-    // TEMPORARY DEBUG (h264 bisect): dump per-MB bS maps in the same
-    // shape as the instrumented ffmpeg FLTDUMP trace. Remove with the
-    // bisect scaffolding.
-    {
-        extern crate std;
-        if std::env::var_os("H264BSDUMP").is_some() {
-            use core::sync::atomic::{AtomicUsize, Ordering};
-            static DUMP_FRAME: AtomicUsize = AtomicUsize::new(0);
-            std::eprintln!("OBSFRAME {}", DUMP_FRAME.fetch_add(1, Ordering::Relaxed));
-            for dmb_y in 0..height_mbs {
-                for dmb_x in 0..width_mbs {
-                    let dm = &mbs[dmb_y * width_mbs + dmb_x];
-                    std::eprintln!(
-                        "OBSMB mb=({},{}) t8={} cbp={} qp={} type={:?} modes={:?} nz={:?}",
-                        dmb_x,
-                        dmb_y,
-                        dm.transform8x8,
-                        dm.cbp,
-                        dm.qp_y,
-                        dm.mb_type,
-                        &dm.i4x4_modes[..],
-                        &dm.nz[..16],
-                    );
-                    let m = &maps[dmb_y * width_mbs + dmb_x];
-                    for e in 0..4usize {
-                        std::eprintln!(
-                            "OBS mb=({},{}) v e={} bs={}{}{}{}",
-                            dmb_x,
-                            dmb_y,
-                            e,
-                            m.v[e][0],
-                            m.v[e][1],
-                            m.v[e][2],
-                            m.v[e][3]
-                        );
-                    }
-                    for e in 0..4usize {
-                        std::eprintln!(
-                            "OBS mb=({},{}) h e={} bs={}{}{}{}",
-                            dmb_x,
-                            dmb_y,
-                            e,
-                            m.h[e][0],
-                            m.h[e][1],
-                            m.h[e][2],
-                            m.h[e][3]
-                        );
-                    }
-                }
-            }
         }
     }
 
@@ -683,22 +542,6 @@ pub(crate) fn filter_frame(
                         qp_p.fill(cur.qp_y);
                     }
                     let one = bs.v[e][band];
-                    // TEMPORARY DEBUG (h264 bisect): per-edge filter inputs.
-                    {
-                        extern crate std;
-                        if std::env::var_os("H264FLT2").is_some() && one > 0 {
-                            std::eprintln!(
-                                "OBSFLT mb=({},{}) v e={} qp={} a={} b={} bs={}",
-                                mb_x,
-                                mb_y,
-                                e,
-                                qp_p[0],
-                                off_a,
-                                off_b,
-                                one
-                            );
-                        }
-                    }
                     filter_v_edge(
                         y, stride, x, y0, &[one; 4], &qp_p, cur.qp_y, off_a, off_b, false,
                     );
@@ -725,22 +568,6 @@ pub(crate) fn filter_frame(
                     // filter_h_edge covers cols x0..x0+3 per call -> need 4 calls
                     for cg in 0..4usize {
                         let one = bs.h[band][cg];
-                        // TEMPORARY DEBUG (h264 bisect): per-edge filter inputs.
-                        {
-                            extern crate std;
-                            if std::env::var_os("H264FLT2").is_some() && one > 0 {
-                                std::eprintln!(
-                                    "OBSFLT mb=({},{}) h e={} qp={} a={} b={} bs={}",
-                                    mb_x,
-                                    mb_y,
-                                    band,
-                                    qp_p[0],
-                                    off_a,
-                                    off_b,
-                                    one
-                                );
-                            }
-                        }
                         filter_h_edge(
                             y,
                             stride,
@@ -841,12 +668,5 @@ pub(crate) fn filter_frame(
                 }
             }
         }
-    }
-    if full_frame_idx != usize::MAX {
-        let tmp = std::env::temp_dir();
-        let _ = std::fs::write(
-            tmp.join(std::format!("hd_post_{}.bin", full_frame_idx)),
-            &y[..4096.min(y.len())],
-        );
     }
 }

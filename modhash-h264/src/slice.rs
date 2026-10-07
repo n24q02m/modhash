@@ -25,8 +25,6 @@ pub(crate) struct Mmco {
     pub op: u8,
     /// `difference_of_pic_nums_minus1` (ops 1, 3).
     pub difference_of_pic_nums: u32,
-    /// `long_term_pic_num` (ops 2, 3, 6).
-    pub long_term_pic_num: u32,
     /// `long_term_frame_idx` (ops 4, 6).
     pub long_term_frame_idx: u32,
     /// `max_long_term_frame_idx_plus1` (op 4).
@@ -291,7 +289,6 @@ pub(crate) fn parse_header(
         if slice_type == SliceType::B {
             wp_l1 = Some(read_list(num_ref_idx_l1_active)?);
         }
-        crate::dbgln!("wp denom={:?} l0={:?} l1={:?}", wp_denom, wp_l0, wp_l1);
     }
 
     // dec_ref_pic_marking (spec 7.3.3.3).
@@ -311,7 +308,6 @@ pub(crate) fn parse_header(
             if adaptive_marking {
                 loop {
                     let op = br.ue()?;
-                    crate::dbgln!("  mmco op={} pos={}", op, br.position());
                     if op == 0 {
                         break;
                     }
@@ -321,7 +317,6 @@ pub(crate) fn parse_header(
                     let mut m = Mmco {
                         op: op as u8,
                         difference_of_pic_nums: 0,
-                        long_term_pic_num: 0,
                         long_term_frame_idx: 0,
                         max_long_term_frame_idx: 0,
                     };
@@ -377,23 +372,6 @@ pub(crate) fn parse_header(
             offset_b = (br.se()? * 2) as i8;
         }
     }
-
-    crate::dbgln!(
-        "sh fnum={} st={} nr0={} nr1={} wp0={} wp1={} idc={} dbfc={} oa={} ob={} qp={} mark={} bitpos={}",
-        frame_num,
-        slice_type as u8,
-        num_ref_idx_l0_active,
-        num_ref_idx_l1_active,
-        wp_l0.is_some(),
-        wp_l1.is_some(),
-        disable_deblock_idc,
-        pps.deblocking_control,
-        offset_a,
-        offset_b,
-        slice_qp_delta,
-        mmco.len(),
-        br.position()
-    );
 
     Ok(SliceHeader {
         first_mb,

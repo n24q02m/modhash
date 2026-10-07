@@ -28,13 +28,6 @@ impl<'a> Br<'a> {
         Br { data, pos: 0 }
     }
 
-    /// The backing RBSP bytes — used only inside `dbgln!`
-    /// diagnostics, which the macro drops in non-test builds.
-    #[allow(dead_code)]
-    pub(crate) fn raw(&self) -> &'a [u8] {
-        self.data
-    }
-
     /// Bits still readable.
     pub(crate) fn remaining(&self) -> usize {
         self.data.len() * 8 - self.pos
@@ -50,8 +43,7 @@ impl<'a> Br<'a> {
         self.pos = self.pos.div_ceil(8) * 8;
     }
 
-    /// Bit position (test-only trace helper).
-    #[allow(dead_code)]
+    /// Bit position (0..8*len).
     pub(crate) fn position(&self) -> usize {
         self.pos
     }

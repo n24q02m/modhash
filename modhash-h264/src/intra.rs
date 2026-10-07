@@ -580,8 +580,8 @@ pub(crate) fn pred8x8(mode: u8, nb: &NbSamples, out: &mut [u8; 64]) {
         }
         t[15] = (tr_raw[6] + 3 * tr_raw[7] + 2) >> 2;
     } else {
-        for i in 8..16 {
-            t[i] = t_raw[7];
+        for tv in t.iter_mut().skip(8) {
+            *tv = t_raw[7];
         }
     }
     // Filtered top-left corner `p'[-1, -1]`.
@@ -604,8 +604,8 @@ pub(crate) fn pred8x8(mode: u8, nb: &NbSamples, out: &mut [u8; 64]) {
                 return;
             }
             for y in 0..8 {
-                for x in 0..8 {
-                    set(out, x, y, t[x]);
+                for (x, &tv) in t.iter().enumerate().take(8) {
+                    set(out, x, y, tv);
                 }
             }
         }
@@ -616,9 +616,9 @@ pub(crate) fn pred8x8(mode: u8, nb: &NbSamples, out: &mut [u8; 64]) {
                 out.fill(dc);
                 return;
             }
-            for y in 0..8 {
+            for (y, &lv) in l.iter().enumerate().take(8) {
                 for x in 0..8 {
-                    set(out, x, y, l[y]);
+                    set(out, x, y, lv);
                 }
             }
         }
