@@ -113,6 +113,13 @@ fn compute_bs(cur: &MbState, mb_a: Option<&MbState>, mb_b: Option<&MbState>) -> 
     } else {
         0
     };
+    // DEVIATION (verified, do not "fix" blindly): the ffmpeg mask_edge
+    // table is {v:[0,3,3,3,1,1,1,1], h:[0,3,1,1,3,3,3,3]}, but enabling it
+    // regresses i16_64x64/ip_32x32/ip_48x48/sliced_80x64 — the zeroed
+    // table is load-bearing, meaning the mask arm above diverges from
+    // ffmpeg somewhere else (probably in edges[]/par0 interaction).
+    // Restoring the table is correct *as part of* that deeper fix, not
+    // alone. Tracked as an open residual in the deblock-exactness packet.
     const MASK_EDGE_TAB: [[u8; 8]; 2] = [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]];
     let mask_edge = [MASK_EDGE_TAB[0][idx], MASK_EDGE_TAB[1][idx]];
     let edges = [
