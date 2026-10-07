@@ -168,11 +168,21 @@ fn unsupported_and_malformed_are_named() {
         decode(&fixture("e_mp4v.mp4"), &Limits::default()),
         Err(Error::Unsupported(_))
     ));
-    // High-profile h264 refuses inside the decoder by profile name.
-    match decode(&fixture("high_64x48.mp4"), &Limits::default()) {
-        Err(Error::Unsupported(m)) => assert!(m.contains("High"), "{m}"),
-        other => panic!("high profile must be Unsupported, got {other:?}"),
-    }
+    // High-profile h264 (transform_8x8_mode) decodes: the CABAC
+    // I_8x8 / 8x8-transform path is implemented and byte-exact on the
+    // conformance fixtures. The refusal era is gone; assert the decode
+    // didn't collapse instead (frames must stay distinct).
+    let high = decode(&fixture("high_64x48.mp4"), &Limits::default())
+        .expect("high profile (8x8 transform) decodes");
+    let mut uniq = high.frame_hashes.clone();
+    uniq.sort_unstable();
+    uniq.dedup();
+    assert_eq!(
+        uniq.len(),
+        high.frame_hashes.len(),
+        "high-profile frames collapsed"
+    );
+    assert!(uniq.len() >= 2, "high profile must yield distinct frames");
     // An mp4 with only an audio track.
     assert!(matches!(
         decode(&fixture("audioonly.mp4"), &Limits::default()),

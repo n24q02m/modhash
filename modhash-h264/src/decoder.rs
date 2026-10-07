@@ -527,21 +527,17 @@ impl Decoder {
     }
 
     /// End-of-stream: flushes the in-progress picture (if any) and
-    /// returns every decoded frame in presentation order.
-    /// debug
+    /// drains every decoded frame so far in presentation order. The
+    /// drain is load-bearing: `push_stream` is called once per input
+    /// sample and must emit only the *new* frames each time, never
+    /// the whole accumulated history.
     fn end_of_stream(&mut self) -> Result<Vec<Frame>> {
         self.finish_picture()?;
-        // Presentation order = ascending POC. `sort_by_key` is stable
-        // so same-POC pairs (shouldn't occur for frame streams) keep
-        // decode order.
         let mut order: Vec<usize> = (0..self.frames.len()).collect();
         order.sort_by_key(|&i| self.frame_pocs[i]);
-        let mut out = Vec::with_capacity(self.frames.len());
-        for &i in order.iter() {
-            let f = &self.frames[i];
-            out.push(f.clone());
-        }
-        Ok(out)
+        let frames = core::mem::take(&mut self.frames);
+        self.frame_pocs.clear();
+        Ok(order.into_iter().map(|i| frames[i].clone()).collect())
     }
 }
 
@@ -3328,8 +3324,8 @@ fn mb_decode_cabac(
             // always intra: missing neighbours default DC-coded (0x7CF).
             let cbf_ctx = dc_cbf_ctx(&pic.mbs, map, 0, true);
             let r = cabac::decode_residual(cab, ResCat::LumaDc16x16, cbf_ctx, &ZIGZAG_4X4)?;
-            for s in 0..16 {
-                dc_y[ZIGZAG_4X4[s] as usize] = r.levels[s];
+            for (&z, &lvl) in ZIGZAG_4X4.iter().zip(r.levels.iter()) {
+                dc_y[z as usize] = lvl;
             }
             if r.total_coeff > 0 {
                 m.dc_coded |= 1;
@@ -3354,8 +3350,8 @@ fn mb_decode_cabac(
                         cbf_ctx,
                         &ZIGZAG_4X4[1..],
                     )?;
-                    for s in 0..15 {
-                        luma_res[blk][ZIGZAG_4X4[s + 1] as usize] = r.levels[s];
+                    for (&z, &lvl) in ZIGZAG_4X4[1..].iter().zip(r.levels.iter()) {
+                        luma_res[blk][z as usize] = lvl;
                     }
                     nz_acc[blk] = r.total_coeff;
                 }
@@ -3395,8 +3391,8 @@ fn mb_decode_cabac(
                         m.mb_type.is_intra(),
                     );
                     let r = cabac::decode_residual(cab, ResCat::Luma4x4, cbf_ctx, &ZIGZAG_4X4)?;
-                    for s in 0..16 {
-                        luma_res[blk][ZIGZAG_4X4[s] as usize] = r.levels[s];
+                    for (&z, &lvl) in ZIGZAG_4X4.iter().zip(r.levels.iter()) {
+                        luma_res[blk][z as usize] = lvl;
                     }
                     nz_acc[blk] = r.total_coeff;
                 }
